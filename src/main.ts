@@ -90,7 +90,7 @@ const LEVELS: LevelDefinition[] = [
     start: { segment: 0, t: 0 },
     exit: p(195, 70),
     fish: [p(45, 350), p(345, 350), p(45, 210)],
-    patrols: [{ path: [p(195, 400), p(195, 305)], speed: 52, offset: 0 }],
+    patrols: [{ path: [p(195, 370), p(195, 305)], speed: 52, offset: 0 }],
   },
   {
     id: 2,
@@ -110,7 +110,7 @@ const LEVELS: LevelDefinition[] = [
     exit: p(195, 72),
     fish: [p(50, 360), p(340, 360), p(340, 238)],
     patrols: [
-      { path: [p(195, 405), p(195, 320)], speed: 36, offset: 80, wander: true },
+      { path: [p(195, 375), p(195, 320)], speed: 36, offset: 80, wander: true },
       { path: [p(195, 282), p(195, 194)], speed: 39, offset: 15, wander: true },
     ],
   },
@@ -132,7 +132,7 @@ const LEVELS: LevelDefinition[] = [
     exit: p(195, 76),
     fish: [p(48, 360), p(342, 360), p(48, 235)],
     patrols: [
-      { path: [p(195, 405), p(195, 325)], speed: 38, offset: 0, wander: true },
+      { path: [p(195, 375), p(195, 325)], speed: 38, offset: 0, wander: true },
       { path: [p(195, 282), p(195, 190)], speed: 41, offset: 130, wander: true },
       { path: [p(70, 172), p(150, 172)], speed: 34, offset: 60, wander: true },
     ],
@@ -355,28 +355,46 @@ class SoundGarden {
   private catMew(frequency: number): void {
     if (!this.context || !this.master || !this.meowBus || !saveData.soundEnabled) return
     const voice = this.context.createOscillator()
-    const sparkle = this.context.createOscillator()
+    const overtone = this.context.createOscillator()
+    const hum = this.context.createOscillator()
+    const vibrato = this.context.createOscillator()
+    const vibratoDepth = this.context.createGain()
+    const formant = this.context.createBiquadFilter()
     const voiceGain = this.context.createGain()
-    const sparkleGain = this.context.createGain()
+    const overtoneGain = this.context.createGain()
+    const humGain = this.context.createGain()
     const now = this.context.currentTime
-    voice.type = 'triangle'
-    voice.frequency.setValueAtTime(frequency * 0.72, now)
-    voice.frequency.exponentialRampToValueAtTime(frequency, now + 0.12)
-    voice.frequency.exponentialRampToValueAtTime(frequency * 0.77, now + 0.4)
-    sparkle.type = 'sine'
-    sparkle.frequency.setValueAtTime(frequency * 1.95, now + 0.05)
-    sparkle.frequency.exponentialRampToValueAtTime(frequency * 1.45, now + 0.34)
+    // 两段式“咪—呜”：前半轻启声，后半上扬后回落；辅以很浅的共振和颤音，避免铃铛般的电子感。
+    voice.type = 'sine'
+    voice.frequency.setValueAtTime(frequency * 0.56, now)
+    voice.frequency.exponentialRampToValueAtTime(frequency * 0.8, now + 0.09)
+    voice.frequency.exponentialRampToValueAtTime(frequency * 1.18, now + 0.22)
+    voice.frequency.exponentialRampToValueAtTime(frequency * 0.7, now + 0.62)
+    overtone.type = 'triangle'
+    overtone.frequency.setValueAtTime(frequency * 1.18, now)
+    overtone.frequency.exponentialRampToValueAtTime(frequency * 1.68, now + 0.19)
+    overtone.frequency.exponentialRampToValueAtTime(frequency * 0.98, now + 0.58)
+    hum.type = 'sine'
+    hum.frequency.setValueAtTime(frequency * 0.28, now)
+    hum.frequency.exponentialRampToValueAtTime(frequency * 0.38, now + 0.16)
+    hum.frequency.exponentialRampToValueAtTime(frequency * 0.25, now + 0.46)
+    vibrato.type = 'sine'; vibrato.frequency.value = 6.2; vibratoDepth.gain.value = 7
+    formant.type = 'bandpass'; formant.frequency.setValueAtTime(1250, now); formant.Q.value = 0.72
     voiceGain.gain.setValueAtTime(0.0001, now)
-    voiceGain.gain.exponentialRampToValueAtTime(0.3, now + 0.055)
-    voiceGain.gain.exponentialRampToValueAtTime(0.13, now + 0.22)
-    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48)
-    sparkleGain.gain.setValueAtTime(0.0001, now)
-    sparkleGain.gain.exponentialRampToValueAtTime(0.075, now + 0.075)
-    sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4)
-    voice.connect(voiceGain); sparkle.connect(sparkleGain)
-    voiceGain.connect(this.meowBus); sparkleGain.connect(this.meowBus)
-    voice.start(now); sparkle.start(now)
-    voice.stop(now + 0.47); sparkle.stop(now + 0.39)
+    voiceGain.gain.exponentialRampToValueAtTime(0.25, now + 0.075)
+    voiceGain.gain.exponentialRampToValueAtTime(0.34, now + 0.22)
+    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.66)
+    overtoneGain.gain.setValueAtTime(0.0001, now)
+    overtoneGain.gain.exponentialRampToValueAtTime(0.05, now + 0.11)
+    overtoneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.58)
+    humGain.gain.setValueAtTime(0.0001, now)
+    humGain.gain.exponentialRampToValueAtTime(0.045, now + 0.04)
+    humGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32)
+    vibrato.connect(vibratoDepth); vibratoDepth.connect(voice.detune); vibratoDepth.connect(overtone.detune)
+    voice.connect(voiceGain); overtone.connect(overtoneGain); hum.connect(humGain)
+    voiceGain.connect(formant); overtoneGain.connect(formant); humGain.connect(formant); formant.connect(this.meowBus)
+    voice.start(now); overtone.start(now); hum.start(now); vibrato.start(now)
+    voice.stop(now + 0.7); overtone.stop(now + 0.65); hum.stop(now + 0.5); vibrato.stop(now + 0.7)
   }
 
   private note(frequency: number, length: number, type: OscillatorType, volume: number): void {
@@ -725,22 +743,21 @@ class GameSession {
   private accessibleSegments(): number[] {
     const current = this.level.segments[this.position.segment]
     const cat = this.catPoint()
-    const nearStart = distance(cat, current.a) < 31
-    const nearEnd = distance(cat, current.b) < 31
     const ids = new Set<number>([this.position.segment])
-    if (nearStart || nearEnd) {
-      const joint = nearStart ? current.a : current.b
+    ;[current.a, current.b].forEach((joint) => {
+      // 提前进入“岔路吸附区”：手指尚未刚好滑到中心点，也能自然地向左右拐弯。
+      if (distance(cat, joint) > 62) return
       this.level.segments.forEach((candidate, index) => {
         if (samePoint(candidate.a, joint) || samePoint(candidate.b, joint)) ids.add(index)
       })
-    }
+    })
     return [...ids]
   }
 
   private moveCat(delta: Point): boolean {
     const magnitude = Math.hypot(delta.x, delta.y)
     if (magnitude < 0.4) return false
-    const maxStep = 27
+    const maxStep = 34
     const factor = Math.min(1, maxStep / magnitude)
     const desired = p(this.catPoint().x + delta.x * factor, this.catPoint().y + delta.y * factor)
     let best: { id: number; t: number; point: Point; distance: number } | undefined
@@ -748,7 +765,7 @@ class GameSession {
       const projected = projectToSegment(desired, this.level.segments[id])
       if (!best || projected.distance < best.distance) best = { id, ...projected }
     })
-    if (!best || best.distance > 34) return false
+    if (!best || best.distance > 48) return false
     const before = this.catPoint()
     this.position = { segment: best.id, t: best.t }
     const movedDistance = distance(before, best.point)
@@ -868,6 +885,7 @@ class GameSession {
         wanderer.direction = samePoint(next.candidate.a, joint) ? 1 : -1
         wanderer.t = wanderer.direction > 0 ? 0 : 1
       }
+      // 每一帧都从当前路段的参数位置取点，随机选择只发生在相连的路口，绝不走到路面之外。
       this.mousePositions[index] = pointOnSegment(this.level.segments[wanderer.segment], wanderer.t)
     })
   }
@@ -946,7 +964,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapse
     if (!collected.has(index)) drawFish(ctx, fish, elapsed + index)
   })
   drawExit(ctx, level.exit, level.theme, elapsed)
-  level.patrols.forEach((patrol, index) => drawMouse(ctx, mousePositions[index] ?? pointOnPatrol(patrol, elapsed), palette.ink, elapsed + index * 0.8, index))
+  level.patrols.forEach((patrol, index) => drawMouse(ctx, mousePositions[index] ?? pointOnPatrol(patrol, elapsed), palette.ink, index))
   drawCat(ctx, cat, palette.ink, animationTime, motion, phase)
 }
 
@@ -1053,12 +1071,12 @@ function drawExit(ctx: CanvasRenderingContext2D, at: Point, theme: Theme, elapse
   ctx.restore()
 }
 
-function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, variant: number): void {
-  ctx.save(); ctx.translate(at.x, at.y + Math.sin(elapsed * 7) * 0.8)
+function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, variant: number): void {
+  ctx.save(); ctx.translate(at.x, at.y)
   ctx.shadowColor = 'rgba(67, 50, 82, .24)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
   const sprite = mouseSpriteImages[variant % mouseSpriteImages.length]
   if (sprite.complete && sprite.naturalWidth > 0) {
-    const size = 55
+    const size = 47
     ctx.drawImage(sprite, -size / 2, -size * .56, size, size)
     ctx.restore()
     return
