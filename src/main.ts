@@ -207,7 +207,7 @@ class SoundGarden {
   startMusic(): void {
     if (!this.ready() || this.timer) return
     this.tickMusic()
-    this.timer = window.setInterval(() => this.tickMusic(), 430)
+    this.timer = window.setInterval(() => this.tickMusic(), 340)
   }
 
   stopMusic(): void {
@@ -228,10 +228,75 @@ class SoundGarden {
 
   private tickMusic(): void {
     if (!this.ready()) return
-    const tune = [523, 659, 784, 659, 587, 659, 880, 784, 523, 659, 784, 1047, 880, 784, 659, 587]
-    const index = this.step % tune.length
-    this.note(tune[index], index % 4 === 0 ? 0.28 : 0.18, 'sine', index % 4 === 0 ? 0.06 : 0.042)
+    // 轻快的拨弦小步舞：短音、留白与偶尔的“咪呜”滑音，比电子循环更像小猫踩着花园小路。
+    const melody = [659, 784, 880, 784, 698, 784, 988, 880, 659, 784, 1047, 988, 880, 784, 698, 587]
+    const harmony = [0, 523, 0, 0, 0, 587, 0, 0, 0, 523, 0, 0, 0, 587, 0, 0]
+    const bass = [131, 0, 0, 0, 147, 0, 0, 0, 131, 0, 0, 0, 147, 0, 0, 0]
+    const index = this.step % melody.length
+    const accent = index % 4 === 0
+    this.pluck(melody[index], accent ? 0.33 : 0.23, accent ? 0.065 : 0.047)
+    if (harmony[index]) this.pluck(harmony[index], 0.3, 0.028)
+    if (bass[index]) this.purr(bass[index], 0.29, 0.035)
+    if (index === 7 || index === 15) this.meowGlide(index === 7 ? 740 : 880)
     this.step += 1
+  }
+
+  private pluck(frequency: number, length: number, volume: number): void {
+    if (!this.context || !this.master || !saveData.soundEnabled) return
+    const oscillator = this.context.createOscillator()
+    const gain = this.context.createGain()
+    const now = this.context.currentTime
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(frequency, now)
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.012)
+    gain.gain.exponentialRampToValueAtTime(volume * 0.3, now + 0.06)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + length)
+    oscillator.connect(gain)
+    gain.connect(this.master)
+    oscillator.start(now)
+    oscillator.stop(now + length + 0.03)
+  }
+
+  private purr(frequency: number, length: number, volume: number): void {
+    if (!this.context || !this.master || !saveData.soundEnabled) return
+    const oscillator = this.context.createOscillator()
+    const tremolo = this.context.createOscillator()
+    const tremoloGain = this.context.createGain()
+    const gain = this.context.createGain()
+    const now = this.context.currentTime
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(frequency, now)
+    tremolo.type = 'sine'
+    tremolo.frequency.value = 23
+    tremoloGain.gain.value = volume * 0.18
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.03)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + length)
+    tremolo.connect(tremoloGain)
+    tremoloGain.connect(gain.gain)
+    oscillator.connect(gain)
+    gain.connect(this.master)
+    oscillator.start(now); tremolo.start(now)
+    oscillator.stop(now + length + 0.04); tremolo.stop(now + length + 0.04)
+  }
+
+  private meowGlide(frequency: number): void {
+    if (!this.context || !this.master || !saveData.soundEnabled) return
+    const oscillator = this.context.createOscillator()
+    const gain = this.context.createGain()
+    const now = this.context.currentTime
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(frequency * 0.78, now)
+    oscillator.frequency.exponentialRampToValueAtTime(frequency, now + 0.11)
+    oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.9, now + 0.25)
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.018, now + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28)
+    oscillator.connect(gain)
+    gain.connect(this.master)
+    oscillator.start(now)
+    oscillator.stop(now + 0.32)
   }
 
   private note(frequency: number, length: number, type: OscillatorType, volume: number): void {
