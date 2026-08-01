@@ -3,6 +3,9 @@ import heroImage from './assets/garden-hero.png'
 import catOrange from './assets/cat-orange.png'
 import catSilver from './assets/cat-silver.png'
 import catMoon from './assets/cat-moon.png'
+import mouseCloud from './assets/mouse-cloud.png'
+import mouseCream from './assets/mouse-cream.png'
+import mouseHazel from './assets/mouse-hazel.png'
 import gardenBoard from './assets/garden-maze-board.png'
 import mushroomBoard from './assets/mushroom-maze-board.png'
 import starlightBoard from './assets/starlight-maze-board.png'
@@ -11,11 +14,13 @@ type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
 type Phase = 'playing' | 'collision' | 'complete'
 type CatId = 'orange' | 'silver' | 'moon'
-type CatMotion = { heading: Point; trotting: boolean; celebrating: boolean }
+type IdleAction = 'none' | 'look' | 'groom' | 'stretch' | 'meow'
+type CatMotion = { heading: Point; trotting: boolean; celebrating: boolean; idleAction: IdleAction }
 
 type Segment = { a: Point; b: Point }
 type RoutePosition = { segment: number; t: number }
-type Patrol = { path: Point[]; speed: number; offset: number }
+type Patrol = { path: Point[]; speed: number; offset: number; wander?: boolean }
+type Wanderer = { segment: number; t: number; direction: 1 | -1 }
 
 type LevelDefinition = {
   id: 1 | 2 | 3
@@ -53,6 +58,8 @@ const catSpriteImages: Record<CatId, HTMLImageElement> = {
   moon: new Image(),
 }
 ;(Object.keys(catOptions) as CatId[]).forEach((id) => { catSpriteImages[id].src = catOptions[id].image })
+const mouseSpriteImages = [new Image(), new Image(), new Image()]
+;[mouseCloud, mouseCream, mouseHazel].forEach((image, index) => { mouseSpriteImages[index].src = image })
 const boardImages: Record<Theme, HTMLImageElement> = {
   garden: new Image(),
   mushroom: new Image(),
@@ -103,8 +110,8 @@ const LEVELS: LevelDefinition[] = [
     exit: p(195, 72),
     fish: [p(50, 360), p(340, 360), p(340, 238)],
     patrols: [
-      { path: [p(195, 405), p(195, 320)], speed: 48, offset: 80 },
-      { path: [p(195, 282), p(195, 194)], speed: 55, offset: 15 },
+      { path: [p(195, 405), p(195, 320)], speed: 36, offset: 80, wander: true },
+      { path: [p(195, 282), p(195, 194)], speed: 39, offset: 15, wander: true },
     ],
   },
   {
@@ -125,9 +132,9 @@ const LEVELS: LevelDefinition[] = [
     exit: p(195, 76),
     fish: [p(48, 360), p(342, 360), p(48, 235)],
     patrols: [
-      { path: [p(195, 405), p(195, 325)], speed: 58, offset: 0 },
-      { path: [p(195, 282), p(195, 190)], speed: 50, offset: 130 },
-      { path: [p(70, 172), p(150, 172)], speed: 46, offset: 60 },
+      { path: [p(195, 405), p(195, 325)], speed: 38, offset: 0, wander: true },
+      { path: [p(195, 282), p(195, 190)], speed: 41, offset: 130, wander: true },
+      { path: [p(70, 172), p(150, 172)], speed: 34, offset: 60, wander: true },
     ],
   },
 ]
@@ -136,6 +143,27 @@ const themes: Record<Theme, { sky: string; skyEnd: string; grass: string; path: 
   garden: { sky: '#edf7d7', skyEnd: '#fff3c8', grass: '#77b987', path: '#ffe29a', edge: '#4f8c73', accent: '#f28d79', ink: '#245a5b' },
   mushroom: { sky: '#f9d8db', skyEnd: '#eee0f8', grass: '#8bb979', path: '#ffdcab', edge: '#a66b86', accent: '#ef8a85', ink: '#654d72' },
   starlight: { sky: '#263b72', skyEnd: '#5b5b9b', grass: '#3c7074', path: '#cdd3ff', edge: '#274f64', accent: '#ffd46c', ink: '#f4eaff' },
+}
+
+const musicTracks: Record<Theme, { tempo: number; melody: number[]; harmony: number[]; bass: number[] }> = {
+  garden: {
+    tempo: 420,
+    melody: [659, 784, 880, 784, 698, 784, 988, 880, 659, 784, 1047, 988, 880, 784, 698, 587, 659, 740, 880, 988, 880, 784, 698, 784, 659, 784, 1047, 1175, 1047, 988, 880, 784, 698, 784, 880, 784, 740, 659, 698, 784, 880, 1047, 988, 880, 784, 698, 659, 587, 659, 784, 880, 1047, 988, 880, 784, 698, 740, 880, 988, 880, 784, 698, 659, 587],
+    harmony: [523, 587, 659, 587, 523, 659, 698, 587],
+    bass: [131, 147, 165, 147, 131, 175, 147, 131],
+  },
+  mushroom: {
+    tempo: 455,
+    melody: [587, 659, 740, 659, 587, 698, 784, 740, 659, 784, 880, 784, 740, 698, 659, 587, 622, 698, 784, 880, 784, 740, 698, 659, 587, 659, 784, 932, 880, 784, 740, 698, 659, 740, 784, 740, 698, 622, 587, 659, 698, 784, 932, 880, 784, 740, 698, 622, 587, 698, 784, 880, 988, 880, 784, 740, 698, 784, 880, 784, 740, 698, 659, 587],
+    harmony: [440, 523, 587, 523, 466, 554, 622, 554],
+    bass: [110, 131, 147, 131, 117, 139, 156, 139],
+  },
+  starlight: {
+    tempo: 520,
+    melody: [523, 659, 784, 659, 587, 698, 784, 880, 659, 784, 988, 880, 784, 698, 659, 523, 587, 698, 880, 988, 880, 784, 698, 659, 523, 659, 784, 1047, 988, 880, 784, 698, 659, 784, 880, 784, 698, 659, 587, 523, 587, 698, 784, 880, 784, 698, 659, 587, 523, 659, 784, 880, 1047, 988, 880, 784, 698, 587, 698, 784, 698, 659, 587, 523],
+    harmony: [392, 494, 587, 494, 440, 523, 659, 523],
+    bass: [98, 123, 147, 123, 110, 131, 165, 131],
+  },
 }
 
 function freshSave(): SaveData {
@@ -212,9 +240,10 @@ function starCount(fishCount: number): number {
 class SoundGarden {
   private context?: AudioContext
   private master?: GainNode
+  private meowBus?: GainNode
   private timer?: number
   private step = 0
-  private nextMewAt = 0
+  private theme: Theme = 'garden'
 
   private ready(): boolean {
     if (!saveData.soundEnabled) return false
@@ -223,6 +252,9 @@ class SoundGarden {
       this.master = this.context.createGain()
       this.master.gain.value = 0.11
       this.master.connect(this.context.destination)
+      this.meowBus = this.context.createGain()
+      this.meowBus.gain.value = 0.5
+      this.meowBus.connect(this.context.destination)
     }
     void this.context.resume()
     return true
@@ -231,14 +263,20 @@ class SoundGarden {
   setEnabled(enabled: boolean): void {
     saveData.soundEnabled = enabled
     persist()
-    if (enabled) this.startMusic()
+    if (enabled) this.startMusic(this.theme)
     if (this.master) this.master.gain.setTargetAtTime(enabled ? 0.11 : 0, this.context!.currentTime, 0.04)
+    if (this.meowBus) this.meowBus.gain.setTargetAtTime(enabled ? 0.5 : 0, this.context!.currentTime, 0.04)
   }
 
-  startMusic(): void {
-    if (!this.ready() || this.timer) return
+  startMusic(theme: Theme = this.theme): void {
+    const themeChanged = this.theme !== theme
+    this.theme = theme
+    if (!this.ready()) return
+    if (this.timer && !themeChanged) return
+    if (this.timer) window.clearInterval(this.timer)
+    this.step = 0
     this.tickMusic()
-    this.timer = window.setInterval(() => this.tickMusic(), 340)
+    this.timer = window.setInterval(() => this.tickMusic(), musicTracks[this.theme].tempo)
   }
 
   stopMusic(): void {
@@ -259,20 +297,19 @@ class SoundGarden {
 
   private tickMusic(): void {
     if (!this.ready()) return
-    // 轻快的拨弦小步舞：短音、留白与偶尔的“咪呜”滑音，比电子循环更像小猫踩着花园小路。
-    const melody = [659, 784, 880, 784, 698, 784, 988, 880, 659, 784, 1047, 988, 880, 784, 698, 587]
-    const harmony = [0, 523, 0, 0, 0, 587, 0, 0, 0, 523, 0, 0, 0, 587, 0, 0]
-    const bass = [131, 0, 0, 0, 147, 0, 0, 0, 131, 0, 0, 0, 147, 0, 0, 0]
-    const index = this.step % melody.length
+    const track = musicTracks[this.theme]
+    const index = this.step % track.melody.length
     const accent = index % 4 === 0
-    this.pluck(melody[index], accent ? 0.33 : 0.23, accent ? 0.065 : 0.047)
-    if (harmony[index]) this.pluck(harmony[index], 0.3, 0.028)
-    if (bass[index]) this.purr(bass[index], 0.29, 0.035)
-    if (this.context && this.context.currentTime >= this.nextMewAt) {
-      this.catMew(index % 8 === 0 ? 760 : 880)
-      this.nextMewAt = this.context.currentTime + 9 + Math.random() * 7
-    }
+    const octaveLift = Math.floor(this.step / track.melody.length) % 2 === 1 && index > 39 ? 2 : 1
+    this.pluck(track.melody[index] * octaveLift, accent ? 0.34 : 0.23, accent ? 0.065 : 0.047)
+    if (index % 8 === 2 || index % 8 === 6) this.pluck(track.harmony[Math.floor(index / 8) % track.harmony.length], 0.31, 0.03)
+    if (index % 4 === 0) this.purr(track.bass[Math.floor(index / 8) % track.bass.length], 0.34, 0.038)
     this.step += 1
+  }
+
+  playMew(): void {
+    if (!this.ready()) return
+    this.catMew(720 + Math.random() * 120)
   }
 
   private pluck(frequency: number, length: number, volume: number): void {
@@ -316,7 +353,7 @@ class SoundGarden {
   }
 
   private catMew(frequency: number): void {
-    if (!this.context || !this.master || !saveData.soundEnabled) return
+    if (!this.context || !this.master || !this.meowBus || !saveData.soundEnabled) return
     const voice = this.context.createOscillator()
     const sparkle = this.context.createOscillator()
     const voiceGain = this.context.createGain()
@@ -330,13 +367,14 @@ class SoundGarden {
     sparkle.frequency.setValueAtTime(frequency * 1.95, now + 0.05)
     sparkle.frequency.exponentialRampToValueAtTime(frequency * 1.45, now + 0.34)
     voiceGain.gain.setValueAtTime(0.0001, now)
-    voiceGain.gain.exponentialRampToValueAtTime(0.04, now + 0.065)
-    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.43)
+    voiceGain.gain.exponentialRampToValueAtTime(0.3, now + 0.055)
+    voiceGain.gain.exponentialRampToValueAtTime(0.13, now + 0.22)
+    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48)
     sparkleGain.gain.setValueAtTime(0.0001, now)
-    sparkleGain.gain.exponentialRampToValueAtTime(0.012, now + 0.09)
-    sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35)
+    sparkleGain.gain.exponentialRampToValueAtTime(0.075, now + 0.075)
+    sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4)
     voice.connect(voiceGain); sparkle.connect(sparkleGain)
-    voiceGain.connect(this.master); sparkleGain.connect(this.master)
+    voiceGain.connect(this.meowBus); sparkleGain.connect(this.meowBus)
     voice.start(now); sparkle.start(now)
     voice.stop(now + 0.47); sparkle.stop(now + 0.39)
   }
@@ -411,7 +449,7 @@ function showCatSelect(level: LevelDefinition): void {
     })
   })
   document.querySelector<HTMLButtonElement>('#catStart')!.addEventListener('click', () => {
-    sound.startMusic()
+    sound.startMusic(level.theme)
     showGame(level)
   })
 }
@@ -470,6 +508,7 @@ function levelCard(level: LevelDefinition): string {
 
 function showGame(level: LevelDefinition): void {
   activeGame?.destroy()
+  sound.startMusic(level.theme)
   root.innerHTML = `
     <main class="game-shell play-shell">
       <header class="play-topbar">
@@ -556,6 +595,11 @@ class GameSession {
   private animationTime = 0
   private lastMoveAt = -1
   private celebrateUntil = 0
+  private idleAction: IdleAction = 'none'
+  private idleActionUntil = 0
+  private nextIdleActionAt = 2.6
+  private mousePositions: Point[] = []
+  private wanderers: Array<Wanderer | undefined> = []
   private heading = p(0, -1)
   private lastFrame = performance.now()
   private frameId?: number
@@ -576,6 +620,7 @@ class GameSession {
     this.hintLabel = document.querySelector<HTMLElement>('#hintLabel')!
     this.bubble = document.querySelector<HTMLElement>('#messageBubble')!
     this.tutorialActive = !saveData.tutorialSeen && level.id === 1
+    this.resetMice()
   }
 
   start(): void {
@@ -607,6 +652,10 @@ class GameSession {
     this.animationTime = 0
     this.lastMoveAt = -1
     this.celebrateUntil = 0
+    this.idleAction = 'none'
+    this.idleActionUntil = 0
+    this.nextIdleActionAt = 2.6
+    this.resetMice()
     this.phase = 'playing'
     this.dragging = false
     this.updateHud()
@@ -632,6 +681,8 @@ class GameSession {
     const pointer = this.toWorld(event)
     if (distance(pointer, this.catPoint()) > 34) return
     this.dragging = true
+    this.idleAction = 'none'
+    this.nextIdleActionAt = this.animationTime + 1.15
     this.pointerId = event.pointerId
     this.lastPointer = pointer
     this.canvas.setPointerCapture(event.pointerId)
@@ -659,6 +710,7 @@ class GameSession {
     this.pointerId = undefined
     this.lastPointer = undefined
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
+    this.nextIdleActionAt = this.animationTime + 1.25 + Math.random() * 0.8
   }
 
   private toWorld(event: PointerEvent): Point {
@@ -673,8 +725,8 @@ class GameSession {
   private accessibleSegments(): number[] {
     const current = this.level.segments[this.position.segment]
     const cat = this.catPoint()
-    const nearStart = distance(cat, current.a) < 19
-    const nearEnd = distance(cat, current.b) < 19
+    const nearStart = distance(cat, current.a) < 31
+    const nearEnd = distance(cat, current.b) < 31
     const ids = new Set<number>([this.position.segment])
     if (nearStart || nearEnd) {
       const joint = nearStart ? current.a : current.b
@@ -696,13 +748,15 @@ class GameSession {
       const projected = projectToSegment(desired, this.level.segments[id])
       if (!best || projected.distance < best.distance) best = { id, ...projected }
     })
-    if (!best || best.distance > 25) return false
+    if (!best || best.distance > 34) return false
     const before = this.catPoint()
     this.position = { segment: best.id, t: best.t }
     const movedDistance = distance(before, best.point)
     if (movedDistance > 0.3) {
       this.heading = p((best.point.x - before.x) / movedDistance, (best.point.y - before.y) / movedDistance)
       this.lastMoveAt = this.animationTime
+      this.idleAction = 'none'
+      this.nextIdleActionAt = this.animationTime + 1.35 + Math.random() * 0.8
     }
     if (movedDistance > 2.5) sound.play('move')
     return movedDistance > 0.3
@@ -727,6 +781,8 @@ class GameSession {
       return
     }
     if (this.phase !== 'playing') return
+    this.updateIdleAction()
+    this.updateMice(delta)
     this.elapsed += delta
     const cat = this.catPoint()
     this.level.fish.forEach((fish, index) => {
@@ -739,7 +795,7 @@ class GameSession {
         window.setTimeout(() => this.showBubble('', ''), 680)
       }
     })
-    const mouseHit = this.level.patrols.some((patrol) => distance(cat, pointOnPatrol(patrol, this.elapsed)) < 28)
+    const mouseHit = this.level.patrols.some((patrol, index) => distance(cat, this.mousePositions[index] ?? pointOnPatrol(patrol, this.elapsed)) < 28)
     if (mouseHit) {
       this.phase = 'collision'
       this.position = { ...this.level.start }
@@ -751,6 +807,69 @@ class GameSession {
       return
     }
     if (distance(cat, this.level.exit) < 27) this.complete()
+  }
+
+  private updateIdleAction(): void {
+    if (this.idleAction !== 'none' && this.animationTime >= this.idleActionUntil) this.idleAction = 'none'
+    const resting = !this.dragging && this.animationTime - this.lastMoveAt > 0.8
+    if (!resting || this.idleAction !== 'none' || this.animationTime < this.nextIdleActionAt) return
+    const actions: IdleAction[] = ['look', 'groom', 'stretch', 'meow']
+    this.idleAction = actions[Math.floor(Math.random() * actions.length)]
+    const duration = this.idleAction === 'stretch' ? 1.15 : this.idleAction === 'groom' ? 1.35 : 0.9
+    this.idleActionUntil = this.animationTime + duration
+    this.nextIdleActionAt = this.idleActionUntil + 3.6 + Math.random() * 3.4
+    if (this.idleAction === 'meow') sound.playMew()
+  }
+
+  private resetMice(): void {
+    this.wanderers = this.level.patrols.map((patrol) => {
+      if (!patrol.wander) return undefined
+      const origin = patrol.path[0]
+      let closest = { segment: 0, ...projectToSegment(origin, this.level.segments[0]) }
+      this.level.segments.forEach((segment, index) => {
+        const projected = projectToSegment(origin, segment)
+        if (projected.distance < closest.distance) closest = { segment: index, ...projected }
+      })
+      return { segment: closest.segment, t: closest.t, direction: Math.random() < 0.5 ? 1 : -1 }
+    })
+    this.mousePositions = this.level.patrols.map((patrol, index) => {
+      const wanderer = this.wanderers[index]
+      return wanderer ? pointOnSegment(this.level.segments[wanderer.segment], wanderer.t) : pointOnPatrol(patrol, this.elapsed)
+    })
+  }
+
+  private updateMice(delta: number): void {
+    this.level.patrols.forEach((patrol, index) => {
+      const wanderer = this.wanderers[index]
+      if (!wanderer) {
+        this.mousePositions[index] = pointOnPatrol(patrol, this.elapsed + delta)
+        return
+      }
+      let remaining = patrol.speed * delta
+      while (remaining > 0.01) {
+        const segment = this.level.segments[wanderer.segment]
+        const length = distance(segment.a, segment.b)
+        const distanceToJoint = (wanderer.direction > 0 ? 1 - wanderer.t : wanderer.t) * length
+        if (remaining < distanceToJoint) {
+          wanderer.t += wanderer.direction * (remaining / length)
+          remaining = 0
+          break
+        }
+        wanderer.t = wanderer.direction > 0 ? 1 : 0
+        remaining -= distanceToJoint
+        const joint = wanderer.direction > 0 ? segment.b : segment.a
+        const choices = this.level.segments.map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+          .filter(({ candidate }) => samePoint(candidate.a, joint) || samePoint(candidate.b, joint))
+        const next = choices.length > 1
+          ? choices.filter(({ candidateIndex }) => candidateIndex !== wanderer.segment)[Math.floor(Math.random() * (choices.length - 1))]
+          : choices[0]
+        if (!next) { remaining = 0; break }
+        wanderer.segment = next.candidateIndex
+        wanderer.direction = samePoint(next.candidate.a, joint) ? 1 : -1
+        wanderer.t = wanderer.direction > 0 ? 0 : 1
+      }
+      this.mousePositions[index] = pointOnSegment(this.level.segments[wanderer.segment], wanderer.t)
+    })
   }
 
   private complete(): void {
@@ -787,8 +906,9 @@ class GameSession {
       heading: this.heading,
       trotting: this.dragging && this.animationTime - this.lastMoveAt < 0.42,
       celebrating: this.animationTime < this.celebrateUntil || this.phase === 'complete',
+      idleAction: this.idleAction,
     }
-    drawWorld(ctx, this.level, this.elapsed, this.collected, this.catPoint(), this.animationTime, motion, this.phase)
+    drawWorld(ctx, this.level, this.elapsed, this.collected, this.catPoint(), this.animationTime, motion, this.phase, this.mousePositions)
   }
 }
 
@@ -805,7 +925,7 @@ function pointOnPatrol(patrol: Patrol, elapsed: number): Point {
   return patrol.path[patrol.path.length - 1]
 }
 
-function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapsed: number, collected: Set<number>, cat: Point, animationTime: number, motion: CatMotion, phase: Phase): void {
+function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapsed: number, collected: Set<number>, cat: Point, animationTime: number, motion: CatMotion, phase: Phase, mousePositions: Point[]): void {
   const palette = themes[level.theme]
   const boardImage = boardImages[level.theme]
   if (boardImage.complete && boardImage.naturalWidth > 0) {
@@ -826,7 +946,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapse
     if (!collected.has(index)) drawFish(ctx, fish, elapsed + index)
   })
   drawExit(ctx, level.exit, level.theme, elapsed)
-  level.patrols.forEach((patrol, index) => drawMouse(ctx, pointOnPatrol(patrol, elapsed), palette.ink, elapsed + index * 0.8))
+  level.patrols.forEach((patrol, index) => drawMouse(ctx, mousePositions[index] ?? pointOnPatrol(patrol, elapsed), palette.ink, elapsed + index * 0.8, index))
   drawCat(ctx, cat, palette.ink, animationTime, motion, phase)
 }
 
@@ -933,11 +1053,18 @@ function drawExit(ctx: CanvasRenderingContext2D, at: Point, theme: Theme, elapse
   ctx.restore()
 }
 
-function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number): void {
-  ctx.save(); ctx.translate(at.x, at.y + Math.sin(elapsed * 8) * 1.5); ctx.scale(0.82, 0.82)
-  ctx.shadowColor = 'rgba(67, 50, 82, .2)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
+function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, variant: number): void {
+  ctx.save(); ctx.translate(at.x, at.y + Math.sin(elapsed * 7) * 0.8)
+  ctx.shadowColor = 'rgba(67, 50, 82, .24)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
+  const sprite = mouseSpriteImages[variant % mouseSpriteImages.length]
+  if (sprite.complete && sprite.naturalWidth > 0) {
+    const size = 55
+    ctx.drawImage(sprite, -size / 2, -size * .56, size, size)
+    ctx.restore()
+    return
+  }
+  ctx.scale(0.82, 0.82)
   ctx.strokeStyle = '#b77d96'; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 4, 15, -0.5, 1.5); ctx.stroke()
-  ctx.fillStyle = '#fff8f1'; ctx.beginPath(); ctx.ellipse(0, 4, 16, 12, 0, 0, Math.PI * 2); ctx.fill()
   ctx.fillStyle = '#a89ab7'; ctx.strokeStyle = ink; ctx.lineWidth = 1.6
   ctx.beginPath(); ctx.ellipse(0, 4, 13, 9.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
   ctx.fillStyle = '#d9bfd0'; [-7, 6].forEach((x) => { ctx.beginPath(); ctx.arc(x, -7, 5.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke() })
@@ -948,33 +1075,41 @@ function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapse
 
 function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, motion: CatMotion, phase: Phase): void {
   const trotting = motion.trotting && phase === 'playing'
-  const stride = Math.sin(elapsed * 18)
   const blink = !trotting && phase === 'playing' && (elapsed % 5.8) < 0.14
   const happyHop = motion.celebrating ? Math.abs(Math.sin(elapsed * 17)) * 7 : 0
   const collisionWobble = phase === 'collision' ? Math.sin(elapsed * 28) * 0.13 : 0
-  const bob = phase === 'collision' ? Math.sin(elapsed * 18) * 2 : trotting ? Math.abs(stride) * -4 : Math.sin(elapsed * 2.2) * 1.35
-  const lean = phase === 'collision' ? collisionWobble : trotting ? motion.heading.x * 0.075 + stride * 0.018 : Math.sin(elapsed * 1.15) * 0.018
-  const stretchX = phase === 'collision' ? 1.12 : trotting ? 1.035 - Math.abs(stride) * 0.045 : 1 + Math.sin(elapsed * 2.2) * 0.012
-  const stretchY = phase === 'collision' ? 0.88 : trotting ? 0.98 + Math.abs(stride) * 0.06 : 1 - Math.sin(elapsed * 2.2) * 0.012
+  const actionProgress = motion.idleAction === 'none' ? 0 : Math.sin(elapsed * 8)
+  const stretching = motion.idleAction === 'stretch'
+  const looking = motion.idleAction === 'look'
+  const bob = phase === 'collision' ? Math.sin(elapsed * 18) * 2 : trotting ? Math.sin(elapsed * 12) * 0.42 : stretching ? Math.abs(actionProgress) * 1.4 : Math.sin(elapsed * 2.2) * 0.7
+  const lean = phase === 'collision' ? collisionWobble : trotting ? motion.heading.x * 0.035 : looking ? actionProgress * 0.065 : Math.sin(elapsed * 1.15) * 0.01
+  const stretchX = phase === 'collision' ? 1.12 : stretching ? 1.08 + Math.abs(actionProgress) * 0.08 : 1
+  const stretchY = phase === 'collision' ? 0.88 : stretching ? 0.94 - Math.abs(actionProgress) * 0.05 : 1
   ctx.save(); ctx.translate(at.x, at.y + bob - happyHop); ctx.rotate(lean); ctx.scale(stretchX, stretchY)
-  if (trotting) {
-    ctx.save(); ctx.globalAlpha = 0.34 + Math.abs(stride) * 0.2; ctx.fillStyle = '#fff1b8'
-    for (let index = 0; index < 3; index += 1) {
-      const offset = 16 + index * 8
-      ctx.beginPath(); ctx.ellipse((index % 2 ? 7 : -7) - motion.heading.x * offset, 26 - motion.heading.y * offset * 0.22, 3.6 - index * 0.5, 1.7, 0, 0, Math.PI * 2); ctx.fill()
-    }
-    ctx.restore()
-  }
   ctx.shadowColor = 'rgba(63, 82, 56, .22)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4
   const catSpriteImage = catSpriteImages[saveData.cat]
   if (catSpriteImage.complete && catSpriteImage.naturalWidth > 0) {
-    const height = 90
+    const height = 76
     const width = height * (catSpriteImage.naturalWidth / catSpriteImage.naturalHeight)
     ctx.drawImage(catSpriteImage, -width / 2, -height * .63, width, height)
     if (blink) {
       ctx.save(); ctx.strokeStyle = 'rgba(69, 74, 63, .68)'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'
       ;[-12, 12].forEach((x) => { ctx.beginPath(); ctx.arc(x, -26, 4.6, 0.1, Math.PI - 0.1); ctx.stroke() })
       ctx.restore()
+    }
+    if (motion.idleAction === 'groom') {
+      ctx.save(); ctx.fillStyle = 'rgba(255, 238, 225, .96)'; ctx.strokeStyle = 'rgba(103, 91, 85, .65)'; ctx.lineWidth = 1.2
+      ctx.beginPath(); ctx.ellipse(15, -13 + actionProgress * 3, 5.8, 4.2, -0.45, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+      ctx.fillStyle = 'rgba(234, 141, 151, .78)'; ctx.beginPath(); ctx.arc(15, -13 + actionProgress * 3, 1.7, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+    }
+    if (motion.idleAction === 'look') {
+      ctx.save(); ctx.strokeStyle = 'rgba(255, 255, 242, .9)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'
+      ctx.beginPath(); ctx.moveTo(20, -25); ctx.lineTo(28, -30); ctx.moveTo(21, -19); ctx.lineTo(31, -20); ctx.stroke(); ctx.restore()
+    }
+    if (motion.idleAction === 'meow') {
+      ctx.save(); ctx.translate(0, -51 + Math.sin(elapsed * 8) * 2); ctx.fillStyle = 'rgba(255, 253, 245, .96)'
+      ctx.beginPath(); ctx.roundRect(-21, -12, 42, 23, 11); ctx.fill()
+      ctx.fillStyle = '#d47770'; ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('喵～', 0, 4); ctx.restore()
     }
     ctx.restore()
     return
