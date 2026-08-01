@@ -3,9 +3,9 @@ import heroImage from './assets/garden-hero.png'
 import catOrange from './assets/cat-orange.png'
 import catSilver from './assets/cat-silver.png'
 import catMoon from './assets/cat-moon.png'
-import gardenBoard from './assets/garden-board.png'
-import mushroomBoard from './assets/mushroom-board.png'
-import starlightBoard from './assets/starlight-board.png'
+import gardenBoard from './assets/garden-maze-board.png'
+import mushroomBoard from './assets/mushroom-maze-board.png'
+import starlightBoard from './assets/starlight-maze-board.png'
 
 type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
@@ -72,13 +72,18 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '跟着金色小路，先认识这座花园吧',
     theme: 'garden',
     segments: [
-      segment(292, 540, 88, 500), segment(88, 500, 88, 260), segment(88, 260, 270, 260),
-      segment(270, 260, 270, 90), segment(270, 90, 140, 90),
+      segment(195, 560, 195, 420),
+      segment(195, 420, 45, 420), segment(195, 420, 345, 420),
+      segment(45, 420, 45, 280), segment(345, 420, 345, 280),
+      segment(45, 280, 195, 280), segment(345, 280, 195, 280), segment(195, 420, 195, 280),
+      segment(45, 280, 45, 145), segment(345, 280, 345, 145),
+      segment(45, 145, 195, 145), segment(345, 145, 195, 145), segment(195, 280, 195, 145),
+      segment(195, 145, 195, 70),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(140, 90),
-    fish: [p(88, 390), p(178, 260), p(270, 175)],
-    patrols: [{ path: [p(130, 260), p(235, 260)], speed: 52, offset: 0 }],
+    exit: p(195, 70),
+    fish: [p(45, 350), p(345, 350), p(45, 210)],
+    patrols: [{ path: [p(195, 400), p(195, 305)], speed: 52, offset: 0 }],
   },
   {
     id: 2,
@@ -86,15 +91,20 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '蘑菇会指路，慢慢走也没关系',
     theme: 'mushroom',
     segments: [
-      segment(75, 510, 300, 510), segment(300, 510, 300, 320), segment(300, 320, 125, 320),
-      segment(125, 320, 125, 120), segment(125, 120, 280, 120),
+      segment(195, 560, 195, 425),
+      segment(195, 425, 50, 425), segment(195, 425, 340, 425),
+      segment(50, 425, 50, 300), segment(340, 425, 340, 300),
+      segment(50, 300, 195, 300), segment(340, 300, 195, 300), segment(195, 425, 195, 300),
+      segment(50, 300, 50, 175), segment(340, 300, 340, 175),
+      segment(50, 175, 195, 175), segment(340, 175, 195, 175), segment(195, 300, 195, 175),
+      segment(195, 175, 195, 72),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(280, 120),
-    fish: [p(190, 510), p(300, 408), p(125, 205)],
+    exit: p(195, 72),
+    fish: [p(50, 360), p(340, 360), p(340, 238)],
     patrols: [
-      { path: [p(160, 320), p(270, 320)], speed: 48, offset: 80 },
-      { path: [p(125, 260), p(125, 165)], speed: 55, offset: 15 },
+      { path: [p(195, 405), p(195, 320)], speed: 48, offset: 80 },
+      { path: [p(195, 282), p(195, 194)], speed: 55, offset: 15 },
     ],
   },
   {
@@ -103,16 +113,21 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '星星在树梢等你，深呼吸再出发',
     theme: 'starlight',
     segments: [
-      segment(300, 510, 85, 510), segment(85, 510, 85, 355), segment(85, 355, 260, 355),
-      segment(260, 355, 260, 140), segment(260, 140, 135, 140),
+      segment(195, 560, 195, 425),
+      segment(195, 425, 48, 425), segment(195, 425, 342, 425),
+      segment(48, 425, 48, 302), segment(342, 425, 342, 302),
+      segment(48, 302, 195, 302), segment(342, 302, 195, 302), segment(195, 425, 195, 302),
+      segment(48, 302, 48, 172), segment(342, 302, 342, 172),
+      segment(48, 172, 195, 172), segment(342, 172, 195, 172), segment(195, 302, 195, 172),
+      segment(195, 172, 195, 76),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(135, 140),
-    fish: [p(183, 510), p(85, 432), p(260, 242)],
+    exit: p(195, 76),
+    fish: [p(48, 360), p(342, 360), p(48, 235)],
     patrols: [
-      { path: [p(115, 510), p(268, 510)], speed: 58, offset: 0 },
-      { path: [p(115, 355), p(225, 355)], speed: 50, offset: 130 },
-      { path: [p(260, 290), p(260, 180)], speed: 46, offset: 60 },
+      { path: [p(195, 405), p(195, 325)], speed: 58, offset: 0 },
+      { path: [p(195, 282), p(195, 190)], speed: 50, offset: 130 },
+      { path: [p(70, 172), p(150, 172)], speed: 46, offset: 60 },
     ],
   },
 ]
