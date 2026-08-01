@@ -1,5 +1,5 @@
 import './style.css'
-import heroImage from './assets/garden-hero.png'
+import homeHeroImage from './assets/home-hero-v2.png'
 import catOrange from './assets/cat-orange.png'
 import catSilver from './assets/cat-silver.png'
 import catMoon from './assets/cat-moon.png'
@@ -69,6 +69,7 @@ const boardImages: Record<Theme, HTMLImageElement> = {
 boardImages.garden.src = gardenBoard
 boardImages.mushroom.src = mushroomBoard
 boardImages.starlight.src = starlightBoard
+const levelArtwork: Record<Theme, string> = { garden: gardenBoard, mushroom: mushroomBoard, starlight: starlightBoard }
 
 const p = (x: number, y: number): Point => ({ x, y })
 const segment = (ax: number, ay: number, bx: number, by: number, via: Point[] = [], mouseAllowed = true): Segment => {
@@ -506,23 +507,34 @@ function showCatSelect(level: LevelDefinition): void {
 function showHome(): void {
   activeGame?.destroy()
   activeGame = undefined
+  const totalStars = saveData.bestStars[1] + saveData.bestStars[2] + saveData.bestStars[3]
   root.innerHTML = `
     <main class="game-shell home-shell">
-      <section class="home-hero" aria-label="童话花园" style="--hero-image: url('${heroImage}')">
+      <section class="home-hero" aria-label="小猫们在童话花园入口" style="--hero-image: url('${homeHeroImage}')">
         <div class="hero-wash"></div>
-        <button class="sound-button" id="soundToggle" type="button" aria-pressed="${saveData.soundEnabled}">${soundLabel()}</button>
-        <div class="hero-copy">
-          <p class="eyebrow">小猫的温柔探险</p>
-          <h1>小猫迷宫<br><em>大冒险</em></h1>
-          <p class="hero-note">收集小鱼干，避开巡逻的小老鼠</p>
-          <button class="primary-button" id="startAdventure" type="button">开始冒险 <span>→</span></button>
+        <div class="home-topline">
+          <span class="home-brand"><i>🐾</i> 猫咪花园探险社</span>
+          <button class="sound-button" id="soundToggle" type="button" aria-label="${soundLabel()}" aria-pressed="${saveData.soundEnabled}"><span>${saveData.soundEnabled ? '♪' : '×'}</span>${saveData.soundEnabled ? '音乐开' : '已静音'}</button>
         </div>
+        <div class="hero-copy">
+          <p class="hero-kicker"><span></span> 一场会发光的温柔冒险 <span></span></p>
+          <h1><span>小猫迷宫</span><em>大冒险</em></h1>
+          <p class="hero-note">沿着花香小路，陪三只小猫<br>找回藏在迷宫里的小鱼干</p>
+          <button class="primary-button hero-start-button" id="startAdventure" type="button"><b>和小猫一起出发</b><span>›</span></button>
+          <small class="hero-promise">无需下载 · 不用登录 · 随时回来继续</small>
+        </div>
+        <div class="hero-scroll-cue"><span>向下发现三座迷宫</span><b>⌄</b></div>
       </section>
       <section class="level-panel" aria-label="关卡入口">
-        <div class="panel-heading"><div><p class="eyebrow">选择一条小路</p><h2>冒险地图</h2></div><span class="fish-total">🐟 ${saveData.bestStars[1] + saveData.bestStars[2] + saveData.bestStars[3]} / 9</span></div>
+        <div class="home-progress-card">
+          <div><span class="progress-icon">✦</span><p><small>我的冒险手册</small><strong>${totalStars === 0 ? '从花园迷宫开始吧' : `已经点亮 ${totalStars} 颗星星`}</strong></p></div>
+          <span class="progress-count"><b>${totalStars}</b><small>/ 9 ⭐</small></span>
+        </div>
+        <div class="panel-heading"><div><p class="eyebrow">今天想去哪里？</p><h2>选择一段旅程</h2></div><span class="unlocked-total">${saveData.unlockedLevel} / 3 已开启</span></div>
         <div class="level-list">
           ${LEVELS.map((level) => levelCard(level)).join('')}
         </div>
+        <p class="home-footer-note">慢慢走也没关系，每条小路都有惊喜。</p>
       </section>
     </main>
   `
@@ -546,11 +558,12 @@ function showHome(): void {
 
 function levelCard(level: LevelDefinition): string {
   const locked = !DEBUG_ROUTES && level.id > saveData.unlockedLevel
+  const labels = { 1: '花香初遇', 2: '蘑菇秘境', 3: '月光终章' }
   return `
-    <button class="level-card theme-${level.theme} ${locked ? 'is-locked' : ''}" type="button" data-level="${level.id}" ${locked ? 'aria-disabled="true"' : ''}>
-      <span class="level-number">0${level.id}</span>
-      <span class="level-card-copy"><strong>${level.title}</strong><small>${locked ? '完成上一关后解锁' : level.subtitle}</small></span>
-      <span class="card-score">${locked ? '🔒' : starsMarkup(saveData.bestStars[level.id], true)}</span>
+    <button class="level-card theme-${level.theme} ${locked ? 'is-locked' : ''}" type="button" data-level="${level.id}" style="--level-art: url('${levelArtwork[level.theme]}')" ${locked ? 'aria-disabled="true"' : ''}>
+      <span class="level-art"><b>0${level.id}</b></span>
+      <span class="level-card-copy"><small>${labels[level.id]}</small><strong>${level.title}</strong><em>${locked ? '完成上一段旅程后开启' : level.subtitle}</em></span>
+      <span class="card-status">${locked ? '<i>🔒</i>' : `<span class="card-score">${starsMarkup(saveData.bestStars[level.id], true)}</span><i>›</i>`}</span>
     </button>
   `
 }
