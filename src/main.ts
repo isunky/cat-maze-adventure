@@ -1,5 +1,6 @@
 import './style.css'
 import heroImage from './assets/garden-hero.png'
+import catSprite from './assets/cat-sprite.png'
 
 type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
@@ -33,6 +34,8 @@ const LOGICAL_WIDTH = 390
 const LOGICAL_HEIGHT = 590
 const STORAGE_KEY = 'cat-maze-adventure:v1'
 const root = document.querySelector<HTMLDivElement>('#app')!
+const catSpriteImage = new Image()
+catSpriteImage.src = catSprite
 
 const p = (x: number, y: number): Point => ({ x, y })
 const segment = (ax: number, ay: number, bx: number, by: number): Segment => ({ a: p(ax, ay), b: p(bx, by) })
@@ -683,12 +686,14 @@ function drawPaths(ctx: CanvasRenderingContext2D, level: LevelDefinition, palett
   ctx.lineJoin = 'round'
   level.segments.forEach((seg) => {
     ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
-    ctx.strokeStyle = palette.edge; ctx.lineWidth = 62; ctx.stroke()
+    ctx.strokeStyle = 'rgba(39, 91, 77, .16)'; ctx.lineWidth = 68; ctx.stroke()
     ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
-    ctx.strokeStyle = palette.path; ctx.lineWidth = 48; ctx.stroke()
+    ctx.strokeStyle = palette.edge; ctx.lineWidth = 60; ctx.stroke()
     ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
-    ctx.strokeStyle = level.theme === 'starlight' ? 'rgba(255,255,255,.32)' : 'rgba(255,255,245,.54)'
-    ctx.lineWidth = 3; ctx.setLineDash([2, 11]); ctx.stroke()
+    ctx.strokeStyle = palette.path; ctx.lineWidth = 50; ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
+    ctx.strokeStyle = level.theme === 'starlight' ? 'rgba(255,255,255,.24)' : 'rgba(255,255,245,.4)'
+    ctx.lineWidth = 2; ctx.setLineDash([1, 13]); ctx.stroke()
   })
   ctx.setLineDash([])
   ctx.restore()
@@ -748,7 +753,15 @@ function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapse
 
 function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, dragging: boolean, phase: Phase): void {
   const bob = phase === 'collision' ? Math.sin(elapsed * 20) * 3 : Math.sin(elapsed * 6) * (dragging ? 1.1 : 1.8)
-  ctx.save(); ctx.translate(at.x, at.y + bob); ctx.scale(dragging ? 1.04 : 1, dragging ? 0.98 : 1)
+  ctx.save(); ctx.translate(at.x, at.y + bob); ctx.scale(dragging ? 1.06 : 1, dragging ? 0.98 : 1)
+  ctx.shadowColor = 'rgba(63, 82, 56, .22)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4
+  if (catSpriteImage.complete && catSpriteImage.naturalWidth > 0) {
+    const height = 90
+    const width = height * (catSpriteImage.naturalWidth / catSpriteImage.naturalHeight)
+    ctx.drawImage(catSpriteImage, -width / 2, -height * .63, width, height)
+    ctx.restore()
+    return
+  }
   ctx.strokeStyle = ink; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'
   ctx.strokeStyle = '#d7865a'; ctx.lineWidth = 7; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(15, 15); ctx.quadraticCurveTo(35, 25, 30, 3); ctx.stroke()
   ctx.strokeStyle = ink; ctx.lineWidth = 2.4
