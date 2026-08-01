@@ -11,6 +11,7 @@ type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
 type Phase = 'playing' | 'collision' | 'complete'
 type CatId = 'orange' | 'silver' | 'moon'
+type CatMotion = { heading: Point; trotting: boolean; celebrating: boolean }
 
 type Segment = { a: Point; b: Point }
 type RoutePosition = { segment: number; t: number }
@@ -537,6 +538,10 @@ class GameSession {
   private pointerId?: number
   private lastPointer?: Point
   private elapsed = 0
+  private animationTime = 0
+  private lastMoveAt = -1
+  private celebrateUntil = 0
+  private heading = p(0, -1)
   private lastFrame = performance.now()
   private frameId?: number
   private collisionUntil = 0
@@ -584,6 +589,9 @@ class GameSession {
     this.position = { ...this.level.start }
     this.collected.clear()
     this.elapsed = 0
+    this.animationTime = 0
+    this.lastMoveAt = -1
+    this.celebrateUntil = 0
     this.phase = 'playing'
     this.dragging = false
     this.updateHud()
@@ -676,8 +684,13 @@ class GameSession {
     if (!best || best.distance > 25) return false
     const before = this.catPoint()
     this.position = { segment: best.id, t: best.t }
-    if (distance(before, best.point) > 2.5) sound.play('move')
-    return distance(before, best.point) > 0.3
+    const movedDistance = distance(before, best.point)
+    if (movedDistance > 0.3) {
+      this.heading = p((best.point.x - before.x) / movedDistance, (best.point.y - before.y) / movedDistance)
+      this.lastMoveAt = this.animationTime
+    }
+    if (movedDistance > 2.5) sound.play('move')
+    return movedDistance > 0.3
   }
 
   private readonly loop = (now: number): void => {
@@ -690,6 +703,7 @@ class GameSession {
   }
 
   private update(now: number, delta: number): void {
+    this.animationTime += delta
     if (this.phase === 'collision') {
       if (now >= this.collisionUntil) {
         this.phase = 'playing'
@@ -703,6 +717,7 @@ class GameSession {
     this.level.fish.forEach((fish, index) => {
       if (!this.collected.has(index) && distance(cat, fish) < 24) {
         this.collected.add(index)
+        this.celebrateUntil = this.animationTime + 0.62
         sound.play('fish')
         this.updateHud()
         this.showBubble('找到了小鱼干！', 'show happy')
@@ -753,7 +768,12 @@ class GameSession {
     const ctx = this.context
     ctx.setTransform(ratio * this.scaleX, 0, 0, ratio * this.scaleY, 0, 0)
     ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
-    drawWorld(ctx, this.level, this.elapsed, this.collected, this.catPoint(), this.dragging, this.phase)
+    const motion: CatMotion = {
+      heading: this.heading,
+      trotting: this.dragging && this.animationTime - this.lastMoveAt < 0.42,
+      celebrating: this.animationTime < this.celebrateUntil || this.phase === 'complete',
+    }
+    drawWorld(ctx, this.level, this.elapsed, this.collected, this.catPoint(), this.animationTime, motion, this.phase)
   }
 }
 
@@ -770,7 +790,7 @@ function pointOnPatrol(patrol: Patrol, elapsed: number): Point {
   return patrol.path[patrol.path.length - 1]
 }
 
-function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapsed: number, collected: Set<number>, cat: Point, dragging: boolean, phase: Phase): void {
+function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapsed: number, collected: Set<number>, cat: Point, animationTime: number, motion: CatMotion, phase: Phase): void {
   const palette = themes[level.theme]
   const boardImage = boardImages[level.theme]
   if (boardImage.complete && boardImage.naturalWidth > 0) {
@@ -792,7 +812,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapse
   })
   drawExit(ctx, level.exit, level.theme, elapsed)
   level.patrols.forEach((patrol, index) => drawMouse(ctx, pointOnPatrol(patrol, elapsed), palette.ink, elapsed + index * 0.8))
-  drawCat(ctx, cat, palette.ink, elapsed, dragging, phase)
+  drawCat(ctx, cat, palette.ink, animationTime, motion, phase)
 }
 
 function drawAtmosphere(ctx: CanvasRenderingContext2D, theme: Theme, elapsed: number): void {
@@ -911,15 +931,36 @@ function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapse
   ctx.fillStyle = '#e98391'; ctx.beginPath(); ctx.arc(0, 6, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.restore()
 }
 
-function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, dragging: boolean, phase: Phase): void {
-  const bob = phase === 'collision' ? Math.sin(elapsed * 20) * 3 : Math.sin(elapsed * 6) * (dragging ? 1.1 : 1.8)
-  ctx.save(); ctx.translate(at.x, at.y + bob); ctx.scale(dragging ? 1.06 : 1, dragging ? 0.98 : 1)
+function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, motion: CatMotion, phase: Phase): void {
+  const trotting = motion.trotting && phase === 'playing'
+  const stride = Math.sin(elapsed * 18)
+  const blink = !trotting && phase === 'playing' && (elapsed % 5.8) < 0.14
+  const happyHop = motion.celebrating ? Math.abs(Math.sin(elapsed * 17)) * 7 : 0
+  const collisionWobble = phase === 'collision' ? Math.sin(elapsed * 28) * 0.13 : 0
+  const bob = phase === 'collision' ? Math.sin(elapsed * 18) * 2 : trotting ? Math.abs(stride) * -4 : Math.sin(elapsed * 2.2) * 1.35
+  const lean = phase === 'collision' ? collisionWobble : trotting ? motion.heading.x * 0.075 + stride * 0.018 : Math.sin(elapsed * 1.15) * 0.018
+  const stretchX = phase === 'collision' ? 1.12 : trotting ? 1.035 - Math.abs(stride) * 0.045 : 1 + Math.sin(elapsed * 2.2) * 0.012
+  const stretchY = phase === 'collision' ? 0.88 : trotting ? 0.98 + Math.abs(stride) * 0.06 : 1 - Math.sin(elapsed * 2.2) * 0.012
+  ctx.save(); ctx.translate(at.x, at.y + bob - happyHop); ctx.rotate(lean); ctx.scale(stretchX, stretchY)
+  if (trotting) {
+    ctx.save(); ctx.globalAlpha = 0.34 + Math.abs(stride) * 0.2; ctx.fillStyle = '#fff1b8'
+    for (let index = 0; index < 3; index += 1) {
+      const offset = 16 + index * 8
+      ctx.beginPath(); ctx.ellipse((index % 2 ? 7 : -7) - motion.heading.x * offset, 26 - motion.heading.y * offset * 0.22, 3.6 - index * 0.5, 1.7, 0, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore()
+  }
   ctx.shadowColor = 'rgba(63, 82, 56, .22)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4
   const catSpriteImage = catSpriteImages[saveData.cat]
   if (catSpriteImage.complete && catSpriteImage.naturalWidth > 0) {
     const height = 90
     const width = height * (catSpriteImage.naturalWidth / catSpriteImage.naturalHeight)
     ctx.drawImage(catSpriteImage, -width / 2, -height * .63, width, height)
+    if (blink) {
+      ctx.save(); ctx.strokeStyle = 'rgba(69, 74, 63, .68)'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'
+      ;[-12, 12].forEach((x) => { ctx.beginPath(); ctx.arc(x, -26, 4.6, 0.1, Math.PI - 0.1); ctx.stroke() })
+      ctx.restore()
+    }
     ctx.restore()
     return
   }
