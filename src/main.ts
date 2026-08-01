@@ -1,6 +1,8 @@
 import './style.css'
 import heroImage from './assets/garden-hero.png'
-import catSprite from './assets/cat-sprite.png'
+import catOrange from './assets/cat-orange.png'
+import catSilver from './assets/cat-silver.png'
+import catMoon from './assets/cat-moon.png'
 import gardenBoard from './assets/garden-board.png'
 import mushroomBoard from './assets/mushroom-board.png'
 import starlightBoard from './assets/starlight-board.png'
@@ -8,6 +10,7 @@ import starlightBoard from './assets/starlight-board.png'
 type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
 type Phase = 'playing' | 'collision' | 'complete'
+type CatId = 'orange' | 'silver' | 'moon'
 
 type Segment = { a: Point; b: Point }
 type RoutePosition = { segment: number; t: number }
@@ -31,14 +34,24 @@ type SaveData = {
   bestStars: Record<1 | 2 | 3, number>
   soundEnabled: boolean
   tutorialSeen: boolean
+  cat: CatId
 }
 
 const LOGICAL_WIDTH = 390
 const LOGICAL_HEIGHT = 590
 const STORAGE_KEY = 'cat-maze-adventure:v1'
 const root = document.querySelector<HTMLDivElement>('#app')!
-const catSpriteImage = new Image()
-catSpriteImage.src = catSprite
+const catOptions: Record<CatId, { name: string; note: string; image: string }> = {
+  orange: { name: '橘子', note: '围着青绿小方巾', image: catOrange },
+  silver: { name: '云朵', note: '戴着温柔粉蝴蝶结', image: catSilver },
+  moon: { name: '月牙', note: '摇着金色小铃铛', image: catMoon },
+}
+const catSpriteImages: Record<CatId, HTMLImageElement> = {
+  orange: new Image(),
+  silver: new Image(),
+  moon: new Image(),
+}
+;(Object.keys(catOptions) as CatId[]).forEach((id) => { catSpriteImages[id].src = catOptions[id].image })
 const boardImages: Record<Theme, HTMLImageElement> = {
   garden: new Image(),
   mushroom: new Image(),
@@ -110,7 +123,7 @@ const themes: Record<Theme, { sky: string; skyEnd: string; grass: string; path: 
 }
 
 function freshSave(): SaveData {
-  return { version: 1, unlockedLevel: 1, bestStars: { 1: 0, 2: 0, 3: 0 }, soundEnabled: true, tutorialSeen: false }
+  return { version: 1, unlockedLevel: 1, bestStars: { 1: 0, 2: 0, 3: 0 }, soundEnabled: true, tutorialSeen: false, cat: 'orange' }
 }
 
 function loadSave(): SaveData {
@@ -129,6 +142,7 @@ function loadSave(): SaveData {
       },
       soundEnabled: parsed.soundEnabled !== false,
       tutorialSeen: parsed.tutorialSeen === true,
+      cat: parsed.cat === 'silver' || parsed.cat === 'moon' ? parsed.cat : 'orange',
     }
   } catch {
     return freshSave()
@@ -327,6 +341,53 @@ function starsMarkup(count: number, muted = false): string {
   return Array.from({ length: 3 }, (_, index) => `<span class="star ${index < count ? '' : 'is-empty'} ${muted ? 'is-small' : ''}">★</span>`).join('')
 }
 
+function catChoicesMarkup(): string {
+  return (Object.keys(catOptions) as CatId[]).map((id) => {
+    const cat = catOptions[id]
+    const chosen = saveData.cat === id
+    return `<button class="cat-choice ${chosen ? 'is-selected' : ''}" type="button" data-cat="${id}" aria-pressed="${chosen}">
+      <span class="cat-choice-art"><img src="${cat.image}" alt="${cat.name}" /></span>
+      <span class="cat-choice-copy"><b>${cat.name}</b><small>${cat.note}</small></span>
+      <span class="cat-choice-check" aria-hidden="true">${chosen ? '✓' : ''}</span>
+    </button>`
+  }).join('')
+}
+
+function showCatSelect(level: LevelDefinition): void {
+  activeGame?.destroy()
+  activeGame = undefined
+  root.innerHTML = `
+    <main class="game-shell cat-select-shell">
+      <header class="cat-select-topbar"><button class="round-button" id="catBack" type="button" aria-label="回到冒险地图">‹</button><div><small>出发前的小仪式</small><strong>和谁一起冒险？</strong></div><span></span></header>
+      <section class="cat-select-card">
+        <p class="eyebrow">选一只小伙伴</p>
+        <p class="cat-select-note">每只小猫都会陪你走过 <b>${level.title}</b></p>
+        <div class="cat-choice-list">${catChoicesMarkup()}</div>
+        <button class="primary-button cat-start-button" id="catStart" type="button">带 ${catOptions[saveData.cat].name} 出发 <span>→</span></button>
+      </section>
+    </main>
+  `
+  document.querySelector<HTMLButtonElement>('#catBack')!.addEventListener('click', showHome)
+  document.querySelectorAll<HTMLButtonElement>('[data-cat]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.cat as CatId
+      saveData.cat = id
+      persist()
+      document.querySelectorAll<HTMLButtonElement>('[data-cat]').forEach((choice) => {
+        const selected = choice.dataset.cat === id
+        choice.classList.toggle('is-selected', selected)
+        choice.setAttribute('aria-pressed', String(selected))
+        choice.querySelector<HTMLElement>('.cat-choice-check')!.textContent = selected ? '✓' : ''
+      })
+      document.querySelector<HTMLButtonElement>('#catStart')!.innerHTML = `带 ${catOptions[id].name} 出发 <span>→</span>`
+    })
+  })
+  document.querySelector<HTMLButtonElement>('#catStart')!.addEventListener('click', () => {
+    sound.startMusic()
+    showGame(level)
+  })
+}
+
 function showHome(): void {
   activeGame?.destroy()
   activeGame = undefined
@@ -351,9 +412,8 @@ function showHome(): void {
     </main>
   `
   document.querySelector<HTMLButtonElement>('#startAdventure')!.addEventListener('click', () => {
-    sound.startMusic()
     const level = LEVELS[Math.min(saveData.unlockedLevel - 1, LEVELS.length - 1)]
-    showGame(level)
+    showCatSelect(level)
   })
   document.querySelector<HTMLButtonElement>('#soundToggle')!.addEventListener('click', () => {
     sound.setEnabled(!saveData.soundEnabled)
@@ -363,8 +423,7 @@ function showHome(): void {
     button.addEventListener('click', () => {
       const id = Number(button.dataset.level) as 1 | 2 | 3
       if (id <= saveData.unlockedLevel) {
-        sound.startMusic()
-        showGame(LEVELS[id - 1])
+        showCatSelect(LEVELS[id - 1])
       }
     })
   })
@@ -844,6 +903,7 @@ function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed:
   const bob = phase === 'collision' ? Math.sin(elapsed * 20) * 3 : Math.sin(elapsed * 6) * (dragging ? 1.1 : 1.8)
   ctx.save(); ctx.translate(at.x, at.y + bob); ctx.scale(dragging ? 1.06 : 1, dragging ? 0.98 : 1)
   ctx.shadowColor = 'rgba(63, 82, 56, .22)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4
+  const catSpriteImage = catSpriteImages[saveData.cat]
   if (catSpriteImage.complete && catSpriteImage.naturalWidth > 0) {
     const height = 90
     const width = height * (catSpriteImage.naturalWidth / catSpriteImage.naturalHeight)
