@@ -198,6 +198,7 @@ class SoundGarden {
   private master?: GainNode
   private timer?: number
   private step = 0
+  private nextMewAt = 0
 
   private ready(): boolean {
     if (!saveData.soundEnabled) return false
@@ -251,7 +252,10 @@ class SoundGarden {
     this.pluck(melody[index], accent ? 0.33 : 0.23, accent ? 0.065 : 0.047)
     if (harmony[index]) this.pluck(harmony[index], 0.3, 0.028)
     if (bass[index]) this.purr(bass[index], 0.29, 0.035)
-    if (index === 7 || index === 15) this.meowGlide(index === 7 ? 740 : 880)
+    if (this.context && this.context.currentTime >= this.nextMewAt) {
+      this.catMew(index % 8 === 0 ? 760 : 880)
+      this.nextMewAt = this.context.currentTime + 9 + Math.random() * 7
+    }
     this.step += 1
   }
 
@@ -295,22 +299,30 @@ class SoundGarden {
     oscillator.stop(now + length + 0.04); tremolo.stop(now + length + 0.04)
   }
 
-  private meowGlide(frequency: number): void {
+  private catMew(frequency: number): void {
     if (!this.context || !this.master || !saveData.soundEnabled) return
-    const oscillator = this.context.createOscillator()
-    const gain = this.context.createGain()
+    const voice = this.context.createOscillator()
+    const sparkle = this.context.createOscillator()
+    const voiceGain = this.context.createGain()
+    const sparkleGain = this.context.createGain()
     const now = this.context.currentTime
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(frequency * 0.78, now)
-    oscillator.frequency.exponentialRampToValueAtTime(frequency, now + 0.11)
-    oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.9, now + 0.25)
-    gain.gain.setValueAtTime(0.0001, now)
-    gain.gain.exponentialRampToValueAtTime(0.018, now + 0.05)
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28)
-    oscillator.connect(gain)
-    gain.connect(this.master)
-    oscillator.start(now)
-    oscillator.stop(now + 0.32)
+    voice.type = 'triangle'
+    voice.frequency.setValueAtTime(frequency * 0.72, now)
+    voice.frequency.exponentialRampToValueAtTime(frequency, now + 0.12)
+    voice.frequency.exponentialRampToValueAtTime(frequency * 0.77, now + 0.4)
+    sparkle.type = 'sine'
+    sparkle.frequency.setValueAtTime(frequency * 1.95, now + 0.05)
+    sparkle.frequency.exponentialRampToValueAtTime(frequency * 1.45, now + 0.34)
+    voiceGain.gain.setValueAtTime(0.0001, now)
+    voiceGain.gain.exponentialRampToValueAtTime(0.04, now + 0.065)
+    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.43)
+    sparkleGain.gain.setValueAtTime(0.0001, now)
+    sparkleGain.gain.exponentialRampToValueAtTime(0.012, now + 0.09)
+    sparkleGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35)
+    voice.connect(voiceGain); sparkle.connect(sparkleGain)
+    voiceGain.connect(this.master); sparkleGain.connect(this.master)
+    voice.start(now); sparkle.start(now)
+    voice.stop(now + 0.47); sparkle.stop(now + 0.39)
   }
 
   private note(frequency: number, length: number, type: OscillatorType, volume: number): void {
