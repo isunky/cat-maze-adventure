@@ -17,7 +17,7 @@ type CatId = 'orange' | 'silver' | 'moon'
 type IdleAction = 'none' | 'look' | 'groom' | 'stretch' | 'meow'
 type CatMotion = { heading: Point; trotting: boolean; celebrating: boolean; idleAction: IdleAction }
 
-type Segment = { a: Point; b: Point }
+type Segment = { a: Point; b: Point; points: Point[]; mouseAllowed: boolean }
 type RoutePosition = { segment: number; t: number }
 type Patrol = { path: Point[]; speed: number; offset: number; wander?: boolean }
 type Wanderer = { segment: number; t: number; direction: 1 | -1 }
@@ -46,6 +46,7 @@ type SaveData = {
 const LOGICAL_WIDTH = 390
 const LOGICAL_HEIGHT = 590
 const STORAGE_KEY = 'cat-maze-adventure:v1'
+const DEBUG_ROUTES = new URLSearchParams(window.location.search).has('debugRoutes')
 const root = document.querySelector<HTMLDivElement>('#app')!
 const catOptions: Record<CatId, { name: string; note: string; image: string }> = {
   orange: { name: '橘子', note: '围着青绿小方巾', image: catOrange },
@@ -70,7 +71,11 @@ boardImages.mushroom.src = mushroomBoard
 boardImages.starlight.src = starlightBoard
 
 const p = (x: number, y: number): Point => ({ x, y })
-const segment = (ax: number, ay: number, bx: number, by: number): Segment => ({ a: p(ax, ay), b: p(bx, by) })
+const segment = (ax: number, ay: number, bx: number, by: number, via: Point[] = [], mouseAllowed = true): Segment => {
+  const a = p(ax, ay)
+  const b = p(bx, by)
+  return { a, b, points: [a, ...via, b], mouseAllowed }
+}
 
 const LEVELS: LevelDefinition[] = [
   {
@@ -79,17 +84,17 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '跟着金色小路，先认识这座花园吧',
     theme: 'garden',
     segments: [
-      segment(195, 560, 195, 420),
-      segment(195, 420, 45, 420), segment(195, 420, 345, 420),
-      segment(45, 420, 45, 280), segment(345, 420, 345, 280),
-      segment(45, 280, 195, 280), segment(345, 280, 195, 280), segment(195, 420, 195, 280),
-      segment(45, 280, 45, 145), segment(345, 280, 345, 145),
-      segment(45, 145, 195, 145), segment(345, 145, 195, 145), segment(195, 280, 195, 145),
-      segment(195, 145, 195, 70),
+      segment(195, 575, 195, 408, [], false),
+      segment(195, 408, 74, 408, [p(136, 408), p(92, 408)]), segment(195, 408, 316, 408, [p(254, 408), p(298, 408)]),
+      segment(74, 408, 74, 277, [p(62, 390), p(62, 304)]), segment(316, 408, 316, 277, [p(328, 390), p(328, 304)]),
+      segment(74, 277, 195, 277, [p(92, 277), p(150, 277)]), segment(316, 277, 195, 277, [p(298, 277), p(240, 277)]), segment(195, 408, 195, 277),
+      segment(74, 277, 74, 139, [p(62, 258), p(62, 163)]), segment(316, 277, 316, 139, [p(328, 258), p(328, 163)]),
+      segment(74, 139, 195, 139, [p(92, 139), p(150, 139)]), segment(316, 139, 195, 139, [p(298, 139), p(240, 139)]), segment(195, 277, 195, 139),
+      segment(195, 139, 195, 78, [], false),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(195, 70),
-    fish: [p(45, 350), p(345, 350), p(45, 210)],
+    exit: p(195, 78),
+    fish: [p(63, 350), p(327, 350), p(62, 210)],
     patrols: [{ path: [p(195, 370), p(195, 305)], speed: 52, offset: 0 }],
   },
   {
@@ -98,17 +103,18 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '蘑菇会指路，慢慢走也没关系',
     theme: 'mushroom',
     segments: [
-      segment(195, 560, 195, 425),
-      segment(195, 425, 50, 425), segment(195, 425, 340, 425),
-      segment(50, 425, 50, 300), segment(340, 425, 340, 300),
-      segment(50, 300, 195, 300), segment(340, 300, 195, 300), segment(195, 425, 195, 300),
-      segment(50, 300, 50, 175), segment(340, 300, 340, 175),
-      segment(50, 175, 195, 175), segment(340, 175, 195, 175), segment(195, 300, 195, 175),
-      segment(195, 175, 195, 72),
+      segment(195, 578, 195, 492, [], false),
+      segment(195, 492, 195, 383, [p(150, 492), p(105, 478), p(75, 452), p(63, 420), p(65, 398), p(82, 385), p(125, 383), p(165, 383)]),
+      segment(195, 492, 195, 383, [p(240, 492), p(285, 478), p(315, 452), p(327, 420), p(325, 398), p(308, 385), p(265, 383), p(225, 383)]),
+      segment(195, 383, 195, 275, [p(155, 383), p(112, 383), p(78, 365), p(62, 333), p(62, 306), p(78, 283), p(118, 275), p(160, 275)]),
+      segment(195, 383, 195, 275, [p(235, 383), p(278, 383), p(312, 365), p(328, 333), p(328, 306), p(312, 283), p(272, 275), p(230, 275)]),
+      segment(195, 275, 195, 169, [p(155, 275), p(112, 275), p(80, 258), p(65, 228), p(66, 200), p(84, 178), p(122, 169), p(160, 169)]),
+      segment(195, 275, 195, 169, [p(235, 275), p(278, 275), p(310, 258), p(325, 228), p(324, 200), p(306, 178), p(268, 169), p(230, 169)]),
+      segment(195, 169, 195, 67, [p(195, 132), p(195, 99)], false),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(195, 72),
-    fish: [p(50, 360), p(340, 360), p(340, 238)],
+    exit: p(195, 67),
+    fish: [p(61, 392), p(329, 392), p(331, 230)],
     patrols: [
       { path: [p(195, 375), p(195, 320)], speed: 36, offset: 80, wander: true },
       { path: [p(195, 282), p(195, 194)], speed: 39, offset: 15, wander: true },
@@ -120,17 +126,20 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '星星在树梢等你，深呼吸再出发',
     theme: 'starlight',
     segments: [
-      segment(195, 560, 195, 425),
-      segment(195, 425, 48, 425), segment(195, 425, 342, 425),
-      segment(48, 425, 48, 302), segment(342, 425, 342, 302),
-      segment(48, 302, 195, 302), segment(342, 302, 195, 302), segment(195, 425, 195, 302),
-      segment(48, 302, 48, 172), segment(342, 302, 342, 172),
-      segment(48, 172, 195, 172), segment(342, 172, 195, 172), segment(195, 302, 195, 172),
-      segment(195, 172, 195, 76),
+      segment(195, 578, 195, 505, [], false),
+      segment(195, 505, 195, 350, [p(150, 505), p(105, 490), p(72, 466), p(53, 435), p(49, 401), p(64, 376), p(100, 360), p(150, 350)]),
+      segment(195, 505, 195, 350, [p(240, 505), p(285, 490), p(318, 466), p(337, 435), p(341, 401), p(326, 376), p(290, 360), p(240, 350)]),
+      segment(195, 505, 195, 350),
+      segment(195, 350, 195, 181, [p(150, 350), p(105, 336), p(72, 312), p(53, 281), p(50, 246), p(66, 218), p(102, 201), p(150, 205), p(178, 220)]),
+      segment(195, 350, 195, 181, [p(240, 350), p(285, 336), p(318, 312), p(337, 281), p(340, 246), p(324, 218), p(288, 201), p(240, 205), p(212, 220)]),
+      segment(195, 350, 195, 181),
+      segment(195, 181, 195, 181, [p(153, 181), p(112, 171), p(77, 151), p(64, 130), p(78, 115), p(115, 124), p(150, 157)]),
+      segment(195, 181, 195, 181, [p(237, 181), p(278, 171), p(313, 151), p(326, 130), p(312, 115), p(275, 124), p(240, 157)]),
+      segment(195, 181, 195, 82, [], false),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(195, 76),
-    fish: [p(48, 360), p(342, 360), p(48, 235)],
+    exit: p(195, 82),
+    fish: [p(52, 407), p(338, 407), p(56, 217)],
     patrols: [
       { path: [p(195, 375), p(195, 325)], speed: 38, offset: 0, wander: true },
       { path: [p(195, 282), p(195, 190)], speed: 41, offset: 130, wander: true },
@@ -215,18 +224,40 @@ function lerp(a: Point, b: Point, t: number): Point {
   return p(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 }
 
+function segmentLength(seg: Segment): number {
+  return seg.points.slice(0, -1).reduce((total, point, index) => total + distance(point, seg.points[index + 1]), 0)
+}
+
 function pointOnSegment(seg: Segment, t: number): Point {
-  return lerp(seg.a, seg.b, t)
+  const total = segmentLength(seg)
+  let cursor = Math.max(0, Math.min(1, t)) * total
+  for (let index = 0; index < seg.points.length - 1; index += 1) {
+    const length = distance(seg.points[index], seg.points[index + 1])
+    if (cursor <= length || index === seg.points.length - 2) return lerp(seg.points[index], seg.points[index + 1], length === 0 ? 0 : cursor / length)
+    cursor -= length
+  }
+  return seg.b
 }
 
 function projectToSegment(point: Point, seg: Segment): { point: Point; t: number; distance: number } {
-  const dx = seg.b.x - seg.a.x
-  const dy = seg.b.y - seg.a.y
-  const lengthSquared = dx * dx + dy * dy
-  const raw = lengthSquared === 0 ? 0 : ((point.x - seg.a.x) * dx + (point.y - seg.a.y) * dy) / lengthSquared
-  const t = Math.max(0, Math.min(1, raw))
-  const projected = pointOnSegment(seg, t)
-  return { point: projected, t, distance: distance(point, projected) }
+  const total = segmentLength(seg)
+  let travelled = 0
+  let best: { point: Point; t: number; distance: number } | undefined
+  for (let index = 0; index < seg.points.length - 1; index += 1) {
+    const a = seg.points[index]
+    const b = seg.points[index + 1]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const lengthSquared = dx * dx + dy * dy
+    const raw = lengthSquared === 0 ? 0 : ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared
+    const localT = Math.max(0, Math.min(1, raw))
+    const projected = lerp(a, b, localT)
+    const partLength = Math.sqrt(lengthSquared)
+    const candidate = { point: projected, t: total === 0 ? 0 : (travelled + partLength * localT) / total, distance: distance(point, projected) }
+    if (!best || candidate.distance < best.distance) best = candidate
+    travelled += partLength
+  }
+  return best ?? { point: seg.a, t: 0, distance: distance(point, seg.a) }
 }
 
 function samePoint(a: Point, b: Point): boolean {
@@ -506,7 +537,7 @@ function showHome(): void {
   document.querySelectorAll<HTMLButtonElement>('[data-level]').forEach((button) => {
     button.addEventListener('click', () => {
       const id = Number(button.dataset.level) as 1 | 2 | 3
-      if (id <= saveData.unlockedLevel) {
+      if (DEBUG_ROUTES || id <= saveData.unlockedLevel) {
         showCatSelect(LEVELS[id - 1])
       }
     })
@@ -514,7 +545,7 @@ function showHome(): void {
 }
 
 function levelCard(level: LevelDefinition): string {
-  const locked = level.id > saveData.unlockedLevel
+  const locked = !DEBUG_ROUTES && level.id > saveData.unlockedLevel
   return `
     <button class="level-card theme-${level.theme} ${locked ? 'is-locked' : ''}" type="button" data-level="${level.id}" ${locked ? 'aria-disabled="true"' : ''}>
       <span class="level-number">0${level.id}</span>
@@ -608,7 +639,8 @@ class GameSession {
   private phase: Phase = 'playing'
   private dragging = false
   private pointerId?: number
-  private lastPointer?: Point
+  private pointerTarget?: Point
+  private followUntil = 0
   private elapsed = 0
   private animationTime = 0
   private lastMoveAt = -1
@@ -676,6 +708,8 @@ class GameSession {
     this.resetMice()
     this.phase = 'playing'
     this.dragging = false
+    this.pointerTarget = undefined
+    this.followUntil = 0
     this.updateHud()
     this.showBubble('重新出发！小猫已经准备好啦。', 'show')
     window.setTimeout(() => this.showBubble('', ''), 900)
@@ -702,23 +736,15 @@ class GameSession {
     this.idleAction = 'none'
     this.nextIdleActionAt = this.animationTime + 1.15
     this.pointerId = event.pointerId
-    this.lastPointer = pointer
+    this.pointerTarget = pointer
+    this.followUntil = Number.POSITIVE_INFINITY
     this.canvas.setPointerCapture(event.pointerId)
     event.preventDefault()
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (!this.dragging || event.pointerId !== this.pointerId || !this.lastPointer || this.phase !== 'playing') return
-    const next = this.toWorld(event)
-    const delta = p(next.x - this.lastPointer.x, next.y - this.lastPointer.y)
-    this.lastPointer = next
-    const moved = this.moveCat(delta)
-    if (moved && this.tutorialActive) {
-      this.tutorialActive = false
-      saveData.tutorialSeen = true
-      persist()
-      this.hintLabel.textContent = '走得真稳，继续找小鱼干吧！'
-    }
+    if (!this.dragging || event.pointerId !== this.pointerId || this.phase !== 'playing') return
+    this.pointerTarget = this.toWorld(event)
     event.preventDefault()
   }
 
@@ -726,7 +752,7 @@ class GameSession {
     if (event.pointerId !== this.pointerId) return
     this.dragging = false
     this.pointerId = undefined
-    this.lastPointer = undefined
+    this.followUntil = this.animationTime + 0.55
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
     this.nextIdleActionAt = this.animationTime + 1.25 + Math.random() * 0.8
   }
@@ -745,8 +771,7 @@ class GameSession {
     const cat = this.catPoint()
     const ids = new Set<number>([this.position.segment])
     ;[current.a, current.b].forEach((joint) => {
-      // 提前进入“岔路吸附区”：手指尚未刚好滑到中心点，也能自然地向左右拐弯。
-      if (distance(cat, joint) > 62) return
+      if (distance(cat, joint) > 68) return
       this.level.segments.forEach((candidate, index) => {
         if (samePoint(candidate.a, joint) || samePoint(candidate.b, joint)) ids.add(index)
       })
@@ -754,28 +779,59 @@ class GameSession {
     return [...ids]
   }
 
-  private moveCat(delta: Point): boolean {
-    const magnitude = Math.hypot(delta.x, delta.y)
-    if (magnitude < 0.4) return false
-    const maxStep = 34
-    const factor = Math.min(1, maxStep / magnitude)
-    const desired = p(this.catPoint().x + delta.x * factor, this.catPoint().y + delta.y * factor)
+  private moveCatTowardPointer(delta: number): boolean {
+    if ((!this.dragging && this.animationTime >= this.followUntil) || !this.pointerTarget) {
+      if (!this.dragging) this.pointerTarget = undefined
+      return false
+    }
+    const before = this.catPoint()
+    const fingerDistance = distance(before, this.pointerTarget)
+    if (fingerDistance < 4) {
+      if (!this.dragging) this.pointerTarget = undefined
+      return false
+    }
     let best: { id: number; t: number; point: Point; distance: number } | undefined
     this.accessibleSegments().forEach((id) => {
-      const projected = projectToSegment(desired, this.level.segments[id])
-      if (!best || projected.distance < best.distance) best = { id, ...projected }
+      const projected = projectToSegment(this.pointerTarget!, this.level.segments[id])
+      const switchPenalty = id === this.position.segment ? 5 : 0
+      const score = projected.distance + switchPenalty
+      if (!best || score < best.distance) best = { id, t: projected.t, point: projected.point, distance: score }
     })
-    if (!best || best.distance > 48) return false
-    const before = this.catPoint()
-    this.position = { segment: best.id, t: best.t }
-    const movedDistance = distance(before, best.point)
+    if (!best) return false
+
+    const speed = Math.min(480, 130 + fingerDistance * 1.55)
+    let remaining = speed * delta
+    if (best.id !== this.position.segment) {
+      const current = this.level.segments[this.position.segment]
+      const connectsAtStart = samePoint(this.level.segments[best.id].a, current.a) || samePoint(this.level.segments[best.id].b, current.a)
+      const jointT = connectsAtStart ? 0 : 1
+      const distanceToJoint = Math.abs(jointT - this.position.t) * segmentLength(current)
+      if (remaining < distanceToJoint) {
+        this.position.t += Math.sign(jointT - this.position.t) * remaining / segmentLength(current)
+        remaining = 0
+      } else {
+        remaining -= distanceToJoint
+        const joint = pointOnSegment(current, jointT)
+        const next = this.level.segments[best.id]
+        const nextStartT = samePoint(next.a, joint) ? 0 : 1
+        this.position = { segment: best.id, t: nextStartT }
+      }
+    }
+    if (remaining > 0) {
+      const current = this.level.segments[this.position.segment]
+      const targetT = best.id === this.position.segment ? best.t : projectToSegment(this.pointerTarget, current).t
+      const maxT = remaining / segmentLength(current)
+      this.position.t += Math.sign(targetT - this.position.t) * Math.min(Math.abs(targetT - this.position.t), maxT)
+    }
+    const after = this.catPoint()
+    const movedDistance = distance(before, after)
     if (movedDistance > 0.3) {
-      this.heading = p((best.point.x - before.x) / movedDistance, (best.point.y - before.y) / movedDistance)
+      this.heading = p((after.x - before.x) / movedDistance, (after.y - before.y) / movedDistance)
       this.lastMoveAt = this.animationTime
       this.idleAction = 'none'
       this.nextIdleActionAt = this.animationTime + 1.35 + Math.random() * 0.8
     }
-    if (movedDistance > 2.5) sound.play('move')
+    if (movedDistance > 3.5 && Math.floor(this.animationTime * 5) !== Math.floor((this.animationTime - delta) * 5)) sound.play('move')
     return movedDistance > 0.3
   }
 
@@ -798,6 +854,13 @@ class GameSession {
       return
     }
     if (this.phase !== 'playing') return
+    const catMoved = this.moveCatTowardPointer(delta)
+    if (catMoved && this.tutorialActive) {
+      this.tutorialActive = false
+      saveData.tutorialSeen = true
+      persist()
+      this.hintLabel.textContent = '走得真稳，继续找小鱼干吧！'
+    }
     this.updateIdleAction()
     this.updateMice(delta)
     this.elapsed += delta
@@ -818,6 +881,8 @@ class GameSession {
       this.position = { ...this.level.start }
       this.elapsed = 0
       this.dragging = false
+      this.pointerTarget = undefined
+      this.followUntil = 0
       this.collisionUntil = now + 900
       sound.play('bump')
       this.showBubble('哎呀，小老鼠先过去啦！', 'show')
@@ -865,7 +930,7 @@ class GameSession {
       let remaining = patrol.speed * delta
       while (remaining > 0.01) {
         const segment = this.level.segments[wanderer.segment]
-        const length = distance(segment.a, segment.b)
+        const length = segmentLength(segment)
         const distanceToJoint = (wanderer.direction > 0 ? 1 - wanderer.t : wanderer.t) * length
         if (remaining < distanceToJoint) {
           wanderer.t += wanderer.direction * (remaining / length)
@@ -876,7 +941,7 @@ class GameSession {
         remaining -= distanceToJoint
         const joint = wanderer.direction > 0 ? segment.b : segment.a
         const choices = this.level.segments.map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
-          .filter(({ candidate }) => samePoint(candidate.a, joint) || samePoint(candidate.b, joint))
+          .filter(({ candidate }) => candidate.mouseAllowed && (samePoint(candidate.a, joint) || samePoint(candidate.b, joint)))
         const next = choices.length > 1
           ? choices.filter(({ candidateIndex }) => candidateIndex !== wanderer.segment)[Math.floor(Math.random() * (choices.length - 1))]
           : choices[0]
@@ -894,6 +959,8 @@ class GameSession {
     if (this.phase !== 'playing') return
     this.phase = 'complete'
     this.dragging = false
+    this.pointerTarget = undefined
+    this.followUntil = 0
     const stars = starCount(this.collected.size)
     saveData.bestStars[this.level.id] = Math.max(saveData.bestStars[this.level.id], stars)
     if (this.level.id < 3) saveData.unlockedLevel = Math.max(saveData.unlockedLevel, (this.level.id + 1) as 1 | 2 | 3) as 1 | 2 | 3
@@ -922,7 +989,7 @@ class GameSession {
     ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
     const motion: CatMotion = {
       heading: this.heading,
-      trotting: this.dragging && this.animationTime - this.lastMoveAt < 0.42,
+      trotting: this.animationTime - this.lastMoveAt < 0.18,
       celebrating: this.animationTime < this.celebrateUntil || this.phase === 'complete',
       idleAction: this.idleAction,
     }
@@ -960,6 +1027,7 @@ function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapse
     drawDecorations(ctx, level, palette)
     drawPaths(ctx, level, palette)
   }
+  if (DEBUG_ROUTES) drawRouteDebug(ctx, level)
   level.fish.forEach((fish, index) => {
     if (!collected.has(index)) drawFish(ctx, fish, elapsed + index)
   })
@@ -1006,17 +1074,33 @@ function drawPaths(ctx: CanvasRenderingContext2D, level: LevelDefinition, palett
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   level.segments.forEach((seg) => {
-    ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
+    ctx.beginPath(); ctx.moveTo(seg.points[0].x, seg.points[0].y); seg.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y))
     ctx.strokeStyle = 'rgba(39, 91, 77, .16)'; ctx.lineWidth = 68; ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
+    ctx.beginPath(); ctx.moveTo(seg.points[0].x, seg.points[0].y); seg.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y))
     ctx.strokeStyle = palette.edge; ctx.lineWidth = 60; ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
+    ctx.beginPath(); ctx.moveTo(seg.points[0].x, seg.points[0].y); seg.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y))
     ctx.strokeStyle = palette.path; ctx.lineWidth = 50; ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(seg.a.x, seg.a.y); ctx.lineTo(seg.b.x, seg.b.y)
+    ctx.beginPath(); ctx.moveTo(seg.points[0].x, seg.points[0].y); seg.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y))
     ctx.strokeStyle = level.theme === 'starlight' ? 'rgba(255,255,255,.24)' : 'rgba(255,255,245,.4)'
     ctx.lineWidth = 2; ctx.setLineDash([1, 13]); ctx.stroke()
   })
   ctx.setLineDash([])
+  ctx.restore()
+}
+
+function drawRouteDebug(ctx: CanvasRenderingContext2D, level: LevelDefinition): void {
+  ctx.save()
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  level.segments.forEach((seg, index) => {
+    ctx.beginPath(); ctx.moveTo(seg.points[0].x, seg.points[0].y); seg.points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y))
+    ctx.strokeStyle = seg.mouseAllowed ? 'rgba(0, 210, 255, .8)' : 'rgba(255, 90, 140, .85)'
+    ctx.lineWidth = 3
+    ctx.stroke()
+    const middle = pointOnSegment(seg, .5)
+    ctx.fillStyle = '#10264f'; ctx.font = '700 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(String(index), middle.x, middle.y - 5)
+    ;[seg.a, seg.b].forEach((point) => { ctx.beginPath(); ctx.arc(point.x, point.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.stroke() })
+  })
   ctx.restore()
 }
 
@@ -1076,8 +1160,8 @@ function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, varian
   ctx.shadowColor = 'rgba(67, 50, 82, .24)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
   const sprite = mouseSpriteImages[variant % mouseSpriteImages.length]
   if (sprite.complete && sprite.naturalWidth > 0) {
-    const size = 47
-    ctx.drawImage(sprite, -size / 2, -size * .56, size, size)
+    const size = 42
+    ctx.drawImage(sprite, -size / 2, -size * .86, size, size)
     ctx.restore()
     return
   }
@@ -1107,7 +1191,7 @@ function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed:
   ctx.shadowColor = 'rgba(63, 82, 56, .22)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4
   const catSpriteImage = catSpriteImages[saveData.cat]
   if (catSpriteImage.complete && catSpriteImage.naturalWidth > 0) {
-    const height = 76
+    const height = 68
     const width = height * (catSpriteImage.naturalWidth / catSpriteImage.naturalHeight)
     ctx.drawImage(catSpriteImage, -width / 2, -height * .63, width, height)
     if (blink) {
