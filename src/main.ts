@@ -1,6 +1,9 @@
 import './style.css'
 import heroImage from './assets/garden-hero.png'
 import catSprite from './assets/cat-sprite.png'
+import gardenBoard from './assets/garden-board.png'
+import mushroomBoard from './assets/mushroom-board.png'
+import starlightBoard from './assets/starlight-board.png'
 
 type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
@@ -36,6 +39,14 @@ const STORAGE_KEY = 'cat-maze-adventure:v1'
 const root = document.querySelector<HTMLDivElement>('#app')!
 const catSpriteImage = new Image()
 catSpriteImage.src = catSprite
+const boardImages: Record<Theme, HTMLImageElement> = {
+  garden: new Image(),
+  mushroom: new Image(),
+  starlight: new Image(),
+}
+boardImages.garden.src = gardenBoard
+boardImages.mushroom.src = mushroomBoard
+boardImages.starlight.src = starlightBoard
 
 const p = (x: number, y: number): Point => ({ x, y })
 const segment = (ax: number, ay: number, bx: number, by: number): Segment => ({ a: p(ax, ay), b: p(bx, by) })
@@ -47,14 +58,13 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '跟着金色小路，先认识这座花园吧',
     theme: 'garden',
     segments: [
-      segment(75, 510, 75, 350), segment(75, 350, 75, 220), segment(75, 350, 195, 350),
-      segment(195, 350, 315, 350), segment(195, 350, 195, 135), segment(315, 350, 315, 470),
-      segment(315, 470, 230, 510), segment(230, 510, 75, 510), segment(75, 220, 195, 135),
+      segment(292, 540, 88, 500), segment(88, 500, 88, 260), segment(88, 260, 270, 260),
+      segment(270, 260, 270, 90), segment(270, 90, 140, 90),
     ],
-    start: { segment: 7, t: 1 },
-    exit: p(195, 135),
-    fish: [p(75, 270), p(278, 350), p(267, 497)],
-    patrols: [{ path: [p(115, 350), p(280, 350)], speed: 52, offset: 0 }],
+    start: { segment: 0, t: 0 },
+    exit: p(140, 90),
+    fish: [p(88, 390), p(178, 260), p(270, 175)],
+    patrols: [{ path: [p(130, 260), p(235, 260)], speed: 52, offset: 0 }],
   },
   {
     id: 2,
@@ -62,17 +72,15 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '蘑菇会指路，慢慢走也没关系',
     theme: 'mushroom',
     segments: [
-      segment(75, 510, 75, 390), segment(75, 390, 200, 390), segment(200, 390, 200, 510),
-      segment(200, 390, 315, 390), segment(315, 390, 315, 260), segment(315, 260, 170, 260),
-      segment(170, 260, 170, 135), segment(170, 135, 315, 135), segment(75, 390, 75, 230),
-      segment(75, 230, 170, 260),
+      segment(75, 510, 300, 510), segment(300, 510, 300, 320), segment(300, 320, 125, 320),
+      segment(125, 320, 125, 120), segment(125, 120, 280, 120),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(315, 135),
-    fish: [p(200, 475), p(78, 285), p(260, 135)],
+    exit: p(280, 120),
+    fish: [p(190, 510), p(300, 408), p(125, 205)],
     patrols: [
-      { path: [p(75, 335), p(75, 230), p(170, 260)], speed: 48, offset: 80 },
-      { path: [p(245, 390), p(315, 390), p(315, 275)], speed: 55, offset: 15 },
+      { path: [p(160, 320), p(270, 320)], speed: 48, offset: 80 },
+      { path: [p(125, 260), p(125, 165)], speed: 55, offset: 15 },
     ],
   },
   {
@@ -81,19 +89,16 @@ const LEVELS: LevelDefinition[] = [
     subtitle: '星星在树梢等你，深呼吸再出发',
     theme: 'starlight',
     segments: [
-      segment(195, 520, 75, 520), segment(75, 520, 75, 390), segment(75, 390, 195, 390),
-      segment(195, 390, 315, 390), segment(315, 390, 315, 520), segment(315, 520, 195, 520),
-      segment(195, 390, 195, 255), segment(195, 255, 75, 255), segment(75, 255, 75, 130),
-      segment(75, 130, 195, 130), segment(195, 255, 315, 255), segment(315, 255, 315, 130),
-      segment(315, 130, 195, 130),
+      segment(300, 510, 85, 510), segment(85, 510, 85, 355), segment(85, 355, 260, 355),
+      segment(260, 355, 260, 140), segment(260, 140, 135, 140),
     ],
     start: { segment: 0, t: 0 },
-    exit: p(195, 130),
-    fish: [p(75, 460), p(315, 460), p(285, 255)],
+    exit: p(135, 140),
+    fish: [p(183, 510), p(85, 432), p(260, 242)],
     patrols: [
-      { path: [p(100, 520), p(285, 520)], speed: 58, offset: 0 },
-      { path: [p(195, 360), p(195, 275), p(90, 255)], speed: 50, offset: 130 },
-      { path: [p(310, 210), p(315, 130), p(215, 130)], speed: 46, offset: 60 },
+      { path: [p(115, 510), p(268, 510)], speed: 58, offset: 0 },
+      { path: [p(115, 355), p(225, 355)], speed: 50, offset: 130 },
+      { path: [p(260, 290), p(260, 180)], speed: 46, offset: 60 },
     ],
   },
 ]
@@ -631,14 +636,21 @@ function pointOnPatrol(patrol: Patrol, elapsed: number): Point {
 
 function drawWorld(ctx: CanvasRenderingContext2D, level: LevelDefinition, elapsed: number, collected: Set<number>, cat: Point, dragging: boolean, phase: Phase): void {
   const palette = themes[level.theme]
-  const gradient = ctx.createLinearGradient(0, 0, 0, LOGICAL_HEIGHT)
-  gradient.addColorStop(0, palette.sky)
-  gradient.addColorStop(1, palette.skyEnd)
-  ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
-  drawAtmosphere(ctx, level.theme, elapsed)
-  drawDecorations(ctx, level, palette)
-  drawPaths(ctx, level, palette)
+  const boardImage = boardImages[level.theme]
+  if (boardImage.complete && boardImage.naturalWidth > 0) {
+    ctx.drawImage(boardImage, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+    ctx.fillStyle = level.theme === 'starlight' ? 'rgba(18, 32, 70, .04)' : 'rgba(255, 253, 238, .035)'
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+  } else {
+    const gradient = ctx.createLinearGradient(0, 0, 0, LOGICAL_HEIGHT)
+    gradient.addColorStop(0, palette.sky)
+    gradient.addColorStop(1, palette.skyEnd)
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT)
+    drawAtmosphere(ctx, level.theme, elapsed)
+    drawDecorations(ctx, level, palette)
+    drawPaths(ctx, level, palette)
+  }
   level.fish.forEach((fish, index) => {
     if (!collected.has(index)) drawFish(ctx, fish, elapsed + index)
   })
@@ -723,32 +735,44 @@ function drawStarPlant(ctx: CanvasRenderingContext2D, at: Point, scale: number):
 function drawFish(ctx: CanvasRenderingContext2D, at: Point, elapsed: number): void {
   const bob = Math.sin(elapsed * 4) * 2
   ctx.save(); ctx.translate(at.x, at.y + bob); ctx.rotate(Math.sin(elapsed * 3) * 0.08)
-  ctx.shadowColor = 'rgba(255,182,65,.55)'; ctx.shadowBlur = 13
-  ctx.fillStyle = '#ffd36b'; ctx.beginPath(); ctx.ellipse(0, 0, 12, 8, 0, 0, Math.PI * 2); ctx.fill()
-  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(19, -9); ctx.lineTo(19, 9); ctx.closePath(); ctx.fill()
-  ctx.fillStyle = '#fff6c9'; ctx.beginPath(); ctx.arc(-4, -2, 1.6, 0, Math.PI * 2); ctx.fill()
+  ctx.shadowColor = 'rgba(167, 105, 27, .32)'; ctx.shadowBlur = 11; ctx.shadowOffsetY = 3
+  ctx.fillStyle = '#fff7d9'; ctx.beginPath(); ctx.ellipse(0, 0, 15, 11, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = '#f7b946'; ctx.strokeStyle = '#a96b38'; ctx.lineWidth = 1.4
+  ctx.beginPath(); ctx.ellipse(0, 0, 11, 7.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(9, 0); ctx.lineTo(18, -8); ctx.lineTo(18, 8); ctx.closePath(); ctx.fill(); ctx.stroke()
+  ctx.strokeStyle = 'rgba(255, 245, 190, .85)'; ctx.lineWidth = 1.2
+  ctx.beginPath(); ctx.arc(-1, 0, 5, -1.2, 1.2); ctx.stroke()
+  ctx.fillStyle = '#fff6c9'; ctx.beginPath(); ctx.arc(-4, -2, 1.7, 0, Math.PI * 2); ctx.fill()
   ctx.restore()
 }
 
 function drawExit(ctx: CanvasRenderingContext2D, at: Point, theme: Theme, elapsed: number): void {
   ctx.save(); ctx.translate(at.x, at.y)
   const accent = themes[theme].accent
-  ctx.fillStyle = theme === 'starlight' ? '#f4dc8a' : '#fff8db'
-  ctx.strokeStyle = accent; ctx.lineWidth = 4
-  ctx.beginPath(); ctx.roundRect(-21, -27, 42, 54, 19); ctx.fill(); ctx.stroke()
-  ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(0, -3, 9 + Math.sin(elapsed * 3) * 1.5, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#fff5c3'; ctx.beginPath(); ctx.arc(3, -7, 2, 0, Math.PI * 2); ctx.fill()
-  ctx.font = '700 12px system-ui'; ctx.fillStyle = themes[theme].ink; ctx.textAlign = 'center'; ctx.fillText('终点', 0, 43); ctx.restore()
+  const glow = 13 + Math.sin(elapsed * 3) * 2
+  ctx.shadowColor = theme === 'starlight' ? '#fff2a6' : accent; ctx.shadowBlur = glow
+  ctx.fillStyle = 'rgba(255, 250, 221, .9)'; ctx.beginPath(); ctx.arc(0, 0, 21, 0, Math.PI * 2); ctx.fill()
+  ctx.shadowBlur = 0; ctx.strokeStyle = accent; ctx.lineWidth = 2.5
+  ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.stroke()
+  ctx.fillStyle = accent
+  for (let index = 0; index < 5; index += 1) {
+    ctx.save(); ctx.rotate((Math.PI * 2 * index) / 5); ctx.beginPath(); ctx.ellipse(0, -11, 4, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+  }
+  ctx.fillStyle = '#ffd66f'; ctx.beginPath(); ctx.arc(0, 0, 5.5, 0, Math.PI * 2); ctx.fill()
+  ctx.restore()
 }
 
 function drawMouse(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number): void {
-  ctx.save(); ctx.translate(at.x, at.y + Math.sin(elapsed * 8) * 1.5); ctx.scale(0.85, 0.85)
-  ctx.strokeStyle = '#b88c9b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(16, 4, 15, -0.5, 1.5); ctx.stroke()
-  ctx.fillStyle = '#b7a8bb'; ctx.strokeStyle = ink; ctx.lineWidth = 2
-  ctx.beginPath(); ctx.ellipse(0, 4, 14, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
-  ctx.fillStyle = '#d9bfd0'; [-7, 6].forEach((x) => { ctx.beginPath(); ctx.arc(x, -7, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke() })
-  ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(-5, 2, 1.7, 0, Math.PI * 2); ctx.arc(5, 2, 1.7, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = '#e98391'; ctx.beginPath(); ctx.arc(0, 8, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+  ctx.save(); ctx.translate(at.x, at.y + Math.sin(elapsed * 8) * 1.5); ctx.scale(0.82, 0.82)
+  ctx.shadowColor = 'rgba(67, 50, 82, .2)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2
+  ctx.strokeStyle = '#b77d96'; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(16, 4, 15, -0.5, 1.5); ctx.stroke()
+  ctx.fillStyle = '#fff8f1'; ctx.beginPath(); ctx.ellipse(0, 4, 16, 12, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = '#a89ab7'; ctx.strokeStyle = ink; ctx.lineWidth = 1.6
+  ctx.beginPath(); ctx.ellipse(0, 4, 13, 9.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke()
+  ctx.fillStyle = '#d9bfd0'; [-7, 6].forEach((x) => { ctx.beginPath(); ctx.arc(x, -7, 5.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke() })
+  ctx.fillStyle = '#fff5f4'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 7, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(-4.7, 1, 1.4, 0, Math.PI * 2); ctx.arc(4.7, 1, 1.4, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = '#e98391'; ctx.beginPath(); ctx.arc(0, 6, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.restore()
 }
 
 function drawCat(ctx: CanvasRenderingContext2D, at: Point, ink: string, elapsed: number, dragging: boolean, phase: Phase): void {
