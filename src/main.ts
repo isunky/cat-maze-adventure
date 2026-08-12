@@ -1,5 +1,5 @@
 import './style.css'
-import homeHeroImage from './assets/home-hero-v2.png'
+import homeHeroImage from './assets/home-hero-v3.webp'
 import catOrange from './assets/cat-orange.png'
 import catSilver from './assets/cat-silver.png'
 import catMoon from './assets/cat-moon.png'
@@ -533,13 +533,16 @@ function showHome(): void {
           <button class="sound-button" id="soundToggle" type="button" aria-label="${soundLabel()}" aria-pressed="${saveData.soundEnabled}"><span>${saveData.soundEnabled ? '♪' : '×'}</span>${saveData.soundEnabled ? '音乐开' : '已静音'}</button>
         </div>
         <div class="hero-copy">
-          <p class="hero-kicker"><span></span> 一场会发光的温柔冒险 <span></span></p>
+          <p class="hero-kicker"><span></span> 花园里的寻宝故事 <span></span></p>
           <h1><span>小猫迷宫</span><em>大冒险</em></h1>
-          <p class="hero-note">沿着花香小路，陪三只小猫<br>找回藏在迷宫里的小鱼干</p>
-          <button class="primary-button hero-start-button" id="startAdventure" type="button"><b>和小猫一起出发</b><span>›</span></button>
-          <small class="hero-promise">无需下载 · 不用登录 · 随时回来继续</small>
+          <p class="hero-note">滑动带路 · 收集鱼干 · 避开老鼠</p>
         </div>
-        <div class="hero-scroll-cue"><span>向下发现三座迷宫</span><b>⌄</b></div>
+        <div class="hero-action-card">
+          <span class="hero-action-label">${totalStars === 0 ? '第一段旅程正等着你' : `冒险进度 · 已点亮 ${totalStars} 颗星`}</span>
+          <button class="primary-button hero-start-button" id="startAdventure" type="button"><b>${totalStars === 0 ? '开始冒险' : '继续冒险'}</b><span>›</span></button>
+          <small class="hero-promise"><i>✓</i> 无需下载　<i>✓</i> 自动保存进度</small>
+        </div>
+        <button class="hero-scroll-cue" id="showLevels" type="button"><span>查看三座迷宫</span><b>⌄</b></button>
       </section>
       <section class="level-panel" aria-label="关卡入口">
         <div class="home-progress-card">
@@ -557,6 +560,9 @@ function showHome(): void {
   document.querySelector<HTMLButtonElement>('#startAdventure')!.addEventListener('click', () => {
     const level = LEVELS[Math.min(saveData.unlockedLevel - 1, LEVELS.length - 1)]
     showCatSelect(level)
+  })
+  document.querySelector<HTMLButtonElement>('#showLevels')!.addEventListener('click', () => {
+    document.querySelector<HTMLElement>('.level-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
   document.querySelector<HTMLButtonElement>('#soundToggle')!.addEventListener('click', () => {
     sound.setEnabled(!saveData.soundEnabled)
