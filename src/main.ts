@@ -9,6 +9,7 @@ import mouseHazel from './assets/mouse-hazel.png'
 import gardenBoard from './assets/garden-maze-board.png'
 import mushroomBoard from './assets/mushroom-maze-board.png'
 import starlightBoard from './assets/starlight-maze-board.png'
+import { chooseClearTurn } from './route-control'
 
 type Point = { x: number; y: number }
 type Theme = 'garden' | 'mushroom' | 'starlight'
@@ -19,6 +20,7 @@ type CatMotion = { heading: Point; trotting: boolean; celebrating: boolean; idle
 
 type Segment = { a: Point; b: Point; points: Point[]; mouseAllowed: boolean }
 type RoutePosition = { segment: number; t: number }
+type TurnIntent = { segment: number; jointT: 0 | 1; entryT: 0 | 1 }
 type Patrol = { path: Point[]; speed: number; offset: number; wander?: boolean }
 type Wanderer = { segment: number; t: number; direction: 1 | -1 }
 
@@ -259,6 +261,20 @@ function projectToSegment(point: Point, seg: Segment): { point: Point; t: number
     travelled += partLength
   }
   return best ?? { point: seg.a, t: 0, distance: distance(point, seg.a) }
+}
+
+function unitVector(from: Point, to: Point): Point {
+  const length = distance(from, to)
+  return length < 0.001 ? p(0, 0) : p((to.x - from.x) / length, (to.y - from.y) / length)
+}
+
+function routeTangent(seg: Segment, atStart: boolean): Point {
+  const points = seg.points
+  return atStart ? unitVector(points[0], points[1]) : unitVector(points[points.length - 1], points[points.length - 2])
+}
+
+function dot(a: Point, b: Point): number {
+  return a.x * b.x + a.y * b.y
 }
 
 function samePoint(a: Point, b: Point): boolean {
@@ -653,6 +669,9 @@ class GameSession {
   private dragging = false
   private pointerId?: number
   private pointerTarget?: Point
+  private pointerSamples: Array<{ point: Point; time: number }> = []
+  private turnIntent?: TurnIntent
+  private turnCooldownUntil = 0
   private followUntil = 0
   private elapsed = 0
   private animationTime = 0
@@ -722,6 +741,8 @@ class GameSession {
     this.phase = 'playing'
     this.dragging = false
     this.pointerTarget = undefined
+    this.pointerSamples = []
+    this.turnIntent = undefined
     this.followUntil = 0
     this.updateHud()
     this.showBubble('重新出发！小猫已经准备好啦。', 'show')
@@ -750,6 +771,8 @@ class GameSession {
     this.nextIdleActionAt = this.animationTime + 1.15
     this.pointerId = event.pointerId
     this.pointerTarget = pointer
+    this.pointerSamples = [{ point: pointer, time: event.timeStamp }]
+    this.turnIntent = undefined
     this.followUntil = Number.POSITIVE_INFINITY
     this.canvas.setPointerCapture(event.pointerId)
     event.preventDefault()
@@ -758,6 +781,8 @@ class GameSession {
   private readonly onPointerMove = (event: PointerEvent): void => {
     if (!this.dragging || event.pointerId !== this.pointerId || this.phase !== 'playing') return
     this.pointerTarget = this.toWorld(event)
+    this.pointerSamples.push({ point: this.pointerTarget, time: event.timeStamp })
+    this.pointerSamples = this.pointerSamples.filter((sample) => event.timeStamp - sample.time <= 80).slice(-5)
     event.preventDefault()
   }
 
@@ -765,7 +790,7 @@ class GameSession {
     if (event.pointerId !== this.pointerId) return
     this.dragging = false
     this.pointerId = undefined
-    this.followUntil = this.animationTime + 0.55
+    this.followUntil = this.animationTime + 0.18
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId)
     this.nextIdleActionAt = this.animationTime + 1.25 + Math.random() * 0.8
   }
@@ -779,62 +804,95 @@ class GameSession {
     return pointOnSegment(this.level.segments[this.position.segment], this.position.t)
   }
 
-  private accessibleSegments(): number[] {
+  private chooseTurnIntent(): TurnIntent | undefined {
+    if (!this.pointerTarget || this.animationTime < this.turnCooldownUntil) return undefined
     const current = this.level.segments[this.position.segment]
-    const cat = this.catPoint()
-    const ids = new Set<number>([this.position.segment])
-    ;[current.a, current.b].forEach((joint) => {
-      if (distance(cat, joint) > 68) return
-      this.level.segments.forEach((candidate, index) => {
-        if (samePoint(candidate.a, joint) || samePoint(candidate.b, joint)) ids.add(index)
+    const currentLength = segmentLength(current)
+    const along = this.position.t * currentLength
+    const endpoints: Array<{ joint: Point; jointT: 0 | 1; remaining: number }> = [
+      { joint: current.a, jointT: 0, remaining: along },
+      { joint: current.b, jointT: 1, remaining: currentLength - along },
+    ]
+    const recentMotion = this.pointerSamples.length > 1
+      ? unitVector(this.pointerSamples[0].point, this.pointerSamples[this.pointerSamples.length - 1].point)
+      : p(0, 0)
+    endpoints.sort((a, b) => a.remaining - b.remaining)
+    for (const endpoint of endpoints) {
+      if (endpoint.remaining > 76) continue
+      const aim = unitVector(endpoint.joint, this.pointerTarget)
+      const choices: Array<{ value: TurnIntent; tangent: Point; projectionDistance: number }> = []
+      this.level.segments.forEach((candidate, segmentId) => {
+        if (segmentId === this.position.segment) return
+        const entryT: 0 | 1 | undefined = samePoint(candidate.a, endpoint.joint) ? 0 : samePoint(candidate.b, endpoint.joint) ? 1 : undefined
+        if (entryT === undefined) return
+        const tangent = routeTangent(candidate, entryT === 0)
+        const projection = projectToSegment(this.pointerTarget!, candidate)
+        choices.push({ value: { segment: segmentId, jointT: endpoint.jointT, entryT }, tangent, projectionDistance: projection.distance })
       })
-    })
-    return [...ids]
+      const selected = chooseClearTurn(aim, recentMotion, choices)
+      if (selected) return selected
+    }
+    return undefined
   }
 
-  private moveCatTowardPointer(delta: number): boolean {
+  private moveCatTowardPointer(delta: number): Point[] {
     if ((!this.dragging && this.animationTime >= this.followUntil) || !this.pointerTarget) {
       if (!this.dragging) this.pointerTarget = undefined
-      return false
+      this.turnIntent = undefined
+      return []
     }
     const before = this.catPoint()
     const fingerDistance = distance(before, this.pointerTarget)
-    if (fingerDistance < 4) {
+    if (fingerDistance < 1.25) {
       if (!this.dragging) this.pointerTarget = undefined
-      return false
+      return []
     }
-    let best: { id: number; t: number; point: Point; distance: number } | undefined
-    this.accessibleSegments().forEach((id) => {
-      const projected = projectToSegment(this.pointerTarget!, this.level.segments[id])
-      const switchPenalty = id === this.position.segment ? 5 : 0
-      const score = projected.distance + switchPenalty
-      if (!best || score < best.distance) best = { id, t: projected.t, point: projected.point, distance: score }
-    })
-    if (!best) return false
-
-    const speed = Math.min(480, 130 + fingerDistance * 1.55)
-    let remaining = speed * delta
-    if (best.id !== this.position.segment) {
-      const current = this.level.segments[this.position.segment]
-      const connectsAtStart = samePoint(this.level.segments[best.id].a, current.a) || samePoint(this.level.segments[best.id].b, current.a)
-      const jointT = connectsAtStart ? 0 : 1
-      const distanceToJoint = Math.abs(jointT - this.position.t) * segmentLength(current)
-      if (remaining < distanceToJoint) {
-        this.position.t += Math.sign(jointT - this.position.t) * remaining / segmentLength(current)
-        remaining = 0
-      } else {
-        remaining -= distanceToJoint
-        const joint = pointOnSegment(current, jointT)
-        const next = this.level.segments[best.id]
-        const nextStartT = samePoint(next.a, joint) ? 0 : 1
-        this.position = { segment: best.id, t: nextStartT }
+    if (this.turnIntent) {
+      const active = this.level.segments[this.position.segment]
+      const joint = this.turnIntent.jointT === 0 ? active.a : active.b
+      const selected = this.level.segments[this.turnIntent.segment]
+      const tangent = routeTangent(selected, this.turnIntent.entryT === 0)
+      if (dot(unitVector(joint, this.pointerTarget), tangent) < -0.45) this.turnIntent = undefined
+    }
+    if (!this.turnIntent) this.turnIntent = this.chooseTurnIntent()
+    const current = this.level.segments[this.position.segment]
+    const projectedCurrent = projectToSegment(this.pointerTarget, current)
+    let desiredDistance = Math.abs(projectedCurrent.t - this.position.t) * segmentLength(current)
+    let direction = Math.sign(projectedCurrent.t - this.position.t)
+    if (this.turnIntent) {
+      const distanceToJoint = Math.abs(this.turnIntent.jointT - this.position.t) * segmentLength(current)
+      const next = this.level.segments[this.turnIntent.segment]
+      const nextProjection = projectToSegment(this.pointerTarget, next)
+      const nextDistance = Math.abs(nextProjection.t - this.turnIntent.entryT) * segmentLength(next)
+      desiredDistance = distanceToJoint + nextDistance
+      direction = Math.sign(this.turnIntent.jointT - this.position.t)
+    }
+    if (desiredDistance < 1.25 || direction === 0) return []
+    const response = 1 - Math.exp(-delta / 0.045)
+    let remaining = Math.min(1100 * delta, Math.max(1.25, desiredDistance * response))
+    const samples: Point[] = []
+    while (remaining > 0.01) {
+      const active = this.level.segments[this.position.segment]
+      const length = segmentLength(active)
+      const targetT = this.turnIntent
+        ? this.turnIntent.jointT
+        : projectToSegment(this.pointerTarget, active).t
+      const available = Math.abs(targetT - this.position.t) * length
+      if (this.turnIntent && available <= Math.min(6, remaining) + 0.001) {
+        this.position.t = targetT
+        if (available > 0.01) samples.push(this.catPoint())
+        remaining -= available
+        const intent = this.turnIntent
+        this.position = { segment: intent.segment, t: intent.entryT }
+        this.turnIntent = undefined
+        this.turnCooldownUntil = this.animationTime + 0.08
+        continue
       }
-    }
-    if (remaining > 0) {
-      const current = this.level.segments[this.position.segment]
-      const targetT = best.id === this.position.segment ? best.t : projectToSegment(this.pointerTarget, current).t
-      const maxT = remaining / segmentLength(current)
-      this.position.t += Math.sign(targetT - this.position.t) * Math.min(Math.abs(targetT - this.position.t), maxT)
+      const actual = Math.min(6, remaining, available)
+      this.position.t += Math.sign(targetT - this.position.t) * actual / length
+      remaining -= actual
+      if (actual > 0.01) samples.push(this.catPoint())
+      if (actual < 0.01 || available <= actual + 0.001) break
     }
     const after = this.catPoint()
     const movedDistance = distance(before, after)
@@ -845,7 +903,7 @@ class GameSession {
       this.nextIdleActionAt = this.animationTime + 1.35 + Math.random() * 0.8
     }
     if (movedDistance > 3.5 && Math.floor(this.animationTime * 5) !== Math.floor((this.animationTime - delta) * 5)) sound.play('move')
-    return movedDistance > 0.3
+    return movedDistance > 0.3 ? samples : []
   }
 
   private readonly loop = (now: number): void => {
@@ -867,7 +925,8 @@ class GameSession {
       return
     }
     if (this.phase !== 'playing') return
-    const catMoved = this.moveCatTowardPointer(delta)
+    const movementSamples = this.moveCatTowardPointer(delta)
+    const catMoved = movementSamples.length > 0
     if (catMoved && this.tutorialActive) {
       this.tutorialActive = false
       saveData.tutorialSeen = true
@@ -877,31 +936,35 @@ class GameSession {
     this.updateIdleAction()
     this.updateMice(delta)
     this.elapsed += delta
-    const cat = this.catPoint()
-    this.level.fish.forEach((fish, index) => {
-      if (!this.collected.has(index) && distance(cat, fish) < 24) {
-        this.collected.add(index)
-        this.celebrateUntil = this.animationTime + 0.62
-        sound.play('fish')
-        this.updateHud()
-        this.showBubble('找到了小鱼干！', 'show happy')
-        window.setTimeout(() => this.showBubble('', ''), 680)
-      }
+    const samples = movementSamples.length > 0 ? movementSamples : [this.catPoint()]
+    samples.forEach((cat) => {
+      this.level.fish.forEach((fish, index) => {
+        if (!this.collected.has(index) && distance(cat, fish) < 24) {
+          this.collected.add(index)
+          this.celebrateUntil = this.animationTime + 0.62
+          sound.play('fish')
+          this.updateHud()
+          this.showBubble('找到了小鱼干！', 'show happy')
+          window.setTimeout(() => this.showBubble('', ''), 680)
+        }
+      })
     })
-    const mouseHit = this.level.patrols.some((patrol, index) => distance(cat, this.mousePositions[index] ?? pointOnPatrol(patrol, this.elapsed)) < 28)
+    const mouseHit = samples.some((cat) => this.level.patrols.some((patrol, index) => distance(cat, this.mousePositions[index] ?? pointOnPatrol(patrol, this.elapsed)) < 28))
     if (mouseHit) {
       this.phase = 'collision'
       this.position = { ...this.level.start }
       this.elapsed = 0
       this.dragging = false
       this.pointerTarget = undefined
+      this.pointerSamples = []
+      this.turnIntent = undefined
       this.followUntil = 0
       this.collisionUntil = now + 900
       sound.play('bump')
       this.showBubble('哎呀，小老鼠先过去啦！', 'show')
       return
     }
-    if (distance(cat, this.level.exit) < 27) this.complete()
+    if (samples.some((cat) => distance(cat, this.level.exit) < 27)) this.complete()
   }
 
   private updateIdleAction(): void {
